@@ -1,0 +1,29 @@
+# Dependencies and package manager noise
+node_modules/
+npm-debug.log*
+
+# Expo and generated output
+.expo/
+dist/
+web-build/
+apps/mobile/ios/
+apps/mobile/android/
+*.tsbuildinfo
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Audio created during local/manual testing
+/recordings/
+*.m4a
+*.aac
+
+# Editor and OS files
+.DS_Store
+.vscode/
