@@ -6,7 +6,19 @@ export type RecordingMetadata = {
   createdAt: string;
   durationMs: number;
   sizeBytes: number;
+  backendRecordingId?: string;
+  processingStatus?: RecordingProcessingStatus;
+  processingError?: string;
+  transcript?: string;
+  transcriptionLanguages?: string[];
 };
+
+export type RecordingProcessingStatus =
+  | 'local'
+  | 'uploading'
+  | 'transcribing'
+  | 'completed'
+  | 'failed';
 
 const recordingsDirectory = new Directory(Paths.document, 'recordings');
 const indexFile = new File(recordingsDirectory, 'index.json');
@@ -21,6 +33,14 @@ function isRecordingMetadata(value: unknown): value is RecordingMetadata {
   }
 
   const item = value as Partial<RecordingMetadata>;
+  const processingStatuses: RecordingProcessingStatus[] = [
+    'local',
+    'uploading',
+    'transcribing',
+    'completed',
+    'failed',
+  ];
+
   return (
     typeof item.id === 'string' &&
     typeof item.fileName === 'string' &&
@@ -30,7 +50,14 @@ function isRecordingMetadata(value: unknown): value is RecordingMetadata {
     typeof item.durationMs === 'number' &&
     item.durationMs >= 0 &&
     typeof item.sizeBytes === 'number' &&
-    item.sizeBytes > 0
+    item.sizeBytes > 0 &&
+    (item.backendRecordingId === undefined || typeof item.backendRecordingId === 'string') &&
+    (item.processingStatus === undefined || processingStatuses.includes(item.processingStatus)) &&
+    (item.processingError === undefined || typeof item.processingError === 'string') &&
+    (item.transcript === undefined || typeof item.transcript === 'string') &&
+    (item.transcriptionLanguages === undefined ||
+      (Array.isArray(item.transcriptionLanguages) &&
+        item.transcriptionLanguages.every((language) => typeof language === 'string')))
   );
 }
 
@@ -154,6 +181,7 @@ export async function persistFinalizedRecording({
     createdAt: createdAt.toISOString(),
     durationMs: Math.max(0, Math.round(durationMs)),
     sizeBytes: destination.size,
+    processingStatus: 'local',
   };
 
   try {
@@ -172,6 +200,18 @@ export async function persistFinalizedRecording({
     console.log(`[Moodi] Saved recording: ${destination.uri}`);
   }
 
+  return recording;
+}
+
+export async function updatePersistedRecording(
+  recording: RecordingMetadata,
+): Promise<RecordingMetadata> {
+  const existing = await loadRecordings();
+  if (!existing.some((item) => item.id === recording.id)) {
+    throw new Error('The local recording no longer exists.');
+  }
+
+  await writeIndex(existing.map((item) => (item.id === recording.id ? recording : item)));
   return recording;
 }
 

@@ -53,7 +53,7 @@ export function RecordingScreen() {
         <View style={styles.header}>
           <Text style={styles.eyebrow}>MOODI</Text>
           <Text style={styles.title}>Capture this moment.</Text>
-          <Text style={styles.subtitle}>Private audio notes, saved only on this device.</Text>
+          <Text style={styles.subtitle}>Saved on this device, then sent for transcription.</Text>
         </View>
 
         <View style={styles.recorderCard}>
@@ -103,7 +103,7 @@ export function RecordingScreen() {
             <View style={styles.permissionCopy}>
               <Text style={styles.permissionTitle}>Microphone access needed</Text>
               <Text style={styles.permissionBody}>
-                Moodi needs microphone permission to record. Your audio stays on this device.
+                Moodi needs microphone permission to record your audio before transcription.
               </Text>
             </View>
             {!library.permission.canAskAgain ? (
@@ -146,54 +146,118 @@ export function RecordingScreen() {
             {library.recordings.map((recording) => {
               const isPlaying = library.playingId === recording.id;
               const actionsDisabled = library.isRecording || library.isBusy;
+              const processingStatus = recording.processingStatus ?? 'local';
+              const isProcessing =
+                processingStatus === 'uploading' || processingStatus === 'transcribing';
+              const processingLabel =
+                processingStatus === 'uploading'
+                  ? 'Uploading…'
+                  : processingStatus === 'transcribing'
+                    ? 'Transcribing…'
+                    : processingStatus === 'completed'
+                      ? `Transcribed${recording.transcriptionLanguages?.length ? ` · ${recording.transcriptionLanguages.join(', ')}` : ''}`
+                      : processingStatus === 'failed'
+                        ? 'Processing failed'
+                        : 'Not transcribed';
 
               return (
-                <View key={recording.id} style={styles.recordingRow}>
-                  <Pressable
-                    accessibilityLabel={isPlaying ? 'Stop playback' : 'Play recording'}
-                    accessibilityRole="button"
-                    disabled={actionsDisabled}
-                    onPress={() => void library.togglePlayback(recording)}
-                    style={({ pressed }) => [
-                      styles.playButton,
-                      isPlaying && styles.playButtonActive,
-                      pressed && styles.pressed,
-                      actionsDisabled && styles.disabled,
-                    ]}>
-                    <Text style={styles.playIcon}>{isPlaying ? '■' : '▶'}</Text>
-                  </Pressable>
-
-                  <View style={styles.recordingInfo}>
-                    <Text style={styles.recordingDate}>{formatDate(recording.createdAt)}</Text>
-                    <Text style={styles.recordingDuration}>{formatDuration(recording.durationMs)}</Text>
-                  </View>
-
-                  <View style={styles.rowActions}>
+                <View key={recording.id} style={styles.recordingCard}>
+                  <View style={styles.recordingRow}>
                     <Pressable
-                      accessibilityLabel="Export recording"
+                      accessibilityLabel={isPlaying ? 'Stop playback' : 'Play recording'}
                       accessibilityRole="button"
                       disabled={actionsDisabled}
-                      onPress={() => void library.shareRecording(recording)}
+                      onPress={() => void library.togglePlayback(recording)}
                       style={({ pressed }) => [
-                        styles.textButton,
+                        styles.playButton,
+                        isPlaying && styles.playButtonActive,
                         pressed && styles.pressed,
                         actionsDisabled && styles.disabled,
                       ]}>
-                      <Text style={styles.shareText}>Export</Text>
+                      <Text style={styles.playIcon}>{isPlaying ? '■' : '▶'}</Text>
                     </Pressable>
-                    <Pressable
-                      accessibilityLabel="Delete recording"
-                      accessibilityRole="button"
-                      disabled={actionsDisabled}
-                      onPress={() => confirmDelete(recording)}
-                      style={({ pressed }) => [
-                        styles.deleteButton,
-                        pressed && styles.pressed,
-                        actionsDisabled && styles.disabled,
-                      ]}>
-                      <Text style={styles.deleteText}>Delete</Text>
-                    </Pressable>
+
+                    <View style={styles.recordingInfo}>
+                      <Text style={styles.recordingDate}>{formatDate(recording.createdAt)}</Text>
+                      <Text style={styles.recordingDuration}>
+                        {formatDuration(recording.durationMs)}
+                      </Text>
+                    </View>
+
+                    <View style={styles.rowActions}>
+                      <Pressable
+                        accessibilityLabel="Export recording"
+                        accessibilityRole="button"
+                        disabled={actionsDisabled}
+                        onPress={() => void library.shareRecording(recording)}
+                        style={({ pressed }) => [
+                          styles.textButton,
+                          pressed && styles.pressed,
+                          actionsDisabled && styles.disabled,
+                        ]}>
+                        <Text style={styles.shareText}>Export</Text>
+                      </Pressable>
+                      <Pressable
+                        accessibilityLabel="Delete recording"
+                        accessibilityRole="button"
+                        disabled={actionsDisabled}
+                        onPress={() => confirmDelete(recording)}
+                        style={({ pressed }) => [
+                          styles.deleteButton,
+                          pressed && styles.pressed,
+                          actionsDisabled && styles.disabled,
+                        ]}>
+                        <Text style={styles.deleteText}>Delete</Text>
+                      </Pressable>
+                    </View>
                   </View>
+
+                  <View style={styles.processingRow}>
+                    {isProcessing ? (
+                      <ActivityIndicator color={colors.accentDark} size="small" />
+                    ) : null}
+                    <Text
+                      accessibilityLiveRegion="polite"
+                      style={[
+                        styles.processingLabel,
+                        processingStatus === 'failed' && styles.processingLabelFailed,
+                      ]}>
+                      {processingLabel}
+                    </Text>
+                    {processingStatus === 'local' || processingStatus === 'failed' ? (
+                      <Pressable
+                        accessibilityLabel={
+                          processingStatus === 'failed'
+                            ? 'Retry transcription'
+                            : 'Transcribe recording'
+                        }
+                        accessibilityRole="button"
+                        disabled={actionsDisabled}
+                        onPress={() => library.retryProcessing(recording)}
+                        style={({ pressed }) => [
+                          styles.retryButton,
+                          pressed && styles.pressed,
+                          actionsDisabled && styles.disabled,
+                        ]}>
+                        <Text style={styles.retryText}>
+                          {processingStatus === 'failed' ? 'Retry' : 'Transcribe'}
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+
+                  {recording.processingError ? (
+                    <Text style={styles.processingError}>{recording.processingError}</Text>
+                  ) : null}
+
+                  {recording.transcript ? (
+                    <View style={styles.transcript}>
+                      <Text style={styles.transcriptLabel}>Transcript</Text>
+                      <Text selectable style={styles.transcriptText}>
+                        {recording.transcript}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
               );
             })}
@@ -293,15 +357,18 @@ const styles = StyleSheet.create({
   emptyTitle: { color: colors.ink, fontSize: 16, fontWeight: '700' },
   emptyBody: { color: colors.muted, fontSize: 14, lineHeight: 20, textAlign: 'center' },
   list: { gap: 10 },
-  recordingRow: {
-    alignItems: 'center',
+  recordingCard: {
     backgroundColor: colors.card,
     borderColor: colors.line,
     borderRadius: 18,
     borderWidth: 1,
+    gap: 11,
+    padding: 12,
+  },
+  recordingRow: {
+    alignItems: 'center',
     flexDirection: 'row',
     gap: 12,
-    padding: 12,
   },
   playButton: { alignItems: 'center', backgroundColor: '#efe9df', borderRadius: 22, height: 44, justifyContent: 'center', width: 44 },
   playButtonActive: { backgroundColor: colors.accent },
@@ -314,6 +381,20 @@ const styles = StyleSheet.create({
   shareText: { color: colors.accentDark, fontSize: 13, fontWeight: '800' },
   deleteButton: { paddingHorizontal: 6, paddingVertical: 5 },
   deleteText: { color: '#8b8176', fontSize: 12, fontWeight: '700' },
+  processingRow: { alignItems: 'center', flexDirection: 'row', gap: 8 },
+  processingLabel: { color: colors.muted, flex: 1, fontSize: 13, fontWeight: '700' },
+  processingLabelFailed: { color: '#982e22' },
+  retryButton: {
+    backgroundColor: '#efe9df',
+    borderRadius: 10,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+  },
+  retryText: { color: colors.accentDark, fontSize: 13, fontWeight: '800' },
+  processingError: { color: '#982e22', fontSize: 12, lineHeight: 17 },
+  transcript: { backgroundColor: '#f5f0e7', borderRadius: 12, gap: 4, padding: 12 },
+  transcriptLabel: { color: colors.muted, fontSize: 12, fontWeight: '800' },
+  transcriptText: { color: colors.ink, fontSize: 14, lineHeight: 21 },
   pressed: { opacity: 0.68 },
   disabled: { opacity: 0.45 },
 });
