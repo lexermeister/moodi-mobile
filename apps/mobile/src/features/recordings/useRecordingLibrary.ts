@@ -171,6 +171,7 @@ export function useRecordingLibrary() {
           processingError: undefined,
           processingStatus: 'completed',
           transcript: transcription.text,
+          transcriptTurns: transcription.turns,
           transcriptionLanguages: transcription.languages.map((language) => language.code),
         });
       } catch (processingError) {

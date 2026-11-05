@@ -1,5 +1,7 @@
 import { Directory, File, FileMode, Paths } from 'expo-file-system';
 
+import { isTranscriptTurn, type TranscriptTurn } from './transcriptionTypes';
+
 export type RecordingMetadata = {
   id: string;
   fileName: string;
@@ -10,6 +12,7 @@ export type RecordingMetadata = {
   processingStatus?: RecordingProcessingStatus;
   processingError?: string;
   transcript?: string;
+  transcriptTurns?: TranscriptTurn[];
   transcriptionLanguages?: string[];
 };
 
@@ -55,6 +58,8 @@ function isRecordingMetadata(value: unknown): value is RecordingMetadata {
     (item.processingStatus === undefined || processingStatuses.includes(item.processingStatus)) &&
     (item.processingError === undefined || typeof item.processingError === 'string') &&
     (item.transcript === undefined || typeof item.transcript === 'string') &&
+    (item.transcriptTurns === undefined ||
+      (Array.isArray(item.transcriptTurns) && item.transcriptTurns.every(isTranscriptTurn))) &&
     (item.transcriptionLanguages === undefined ||
       (Array.isArray(item.transcriptionLanguages) &&
         item.transcriptionLanguages.every((language) => typeof language === 'string')))

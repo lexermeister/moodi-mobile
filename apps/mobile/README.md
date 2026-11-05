@@ -1,7 +1,7 @@
 # Moodi mobile
 
 The app records and stores verified M4A files locally, then uploads them to the configured Moodi
-backend and displays the returned `gpt-transcribe` transcript.
+backend and displays the returned diarized transcript one speaker turn per line.
 
 ## Backend configuration
 

@@ -1,5 +1,7 @@
 import { File, UploadType } from 'expo-file-system';
 
+import { isTranscriptTurn, type TranscriptTurn } from './transcriptionTypes';
+
 const REQUEST_TIMEOUT_MS = 120_000;
 
 type UploadRecordingResponse = {
@@ -12,6 +14,7 @@ type UploadRecordingResponse = {
 export type TranscriptionResponse = {
   recording_id: string;
   text: string;
+  turns: TranscriptTurn[];
   languages: { code: string }[];
   model: string;
   status: 'completed';
@@ -76,6 +79,8 @@ function isTranscriptionResponse(value: unknown): value is TranscriptionResponse
   return (
     typeof response.recording_id === 'string' &&
     typeof response.text === 'string' &&
+    Array.isArray(response.turns) &&
+    response.turns.every(isTranscriptTurn) &&
     Array.isArray(response.languages) &&
     response.languages.every(
       (language) =>

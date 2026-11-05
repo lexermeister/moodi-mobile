@@ -147,6 +147,11 @@ export function RecordingScreen() {
               const isPlaying = library.playingId === recording.id;
               const actionsDisabled = library.isRecording || library.isBusy;
               const processingStatus = recording.processingStatus ?? 'local';
+              const displayedTranscript = recording.transcriptTurns?.length
+                ? recording.transcriptTurns
+                    .map((turn) => `${turn.speaker}: "${turn.text}"`)
+                    .join('\n')
+                : recording.transcript;
               const isProcessing =
                 processingStatus === 'uploading' || processingStatus === 'transcribing';
               const processingLabel =
@@ -250,11 +255,11 @@ export function RecordingScreen() {
                     <Text style={styles.processingError}>{recording.processingError}</Text>
                   ) : null}
 
-                  {recording.transcript ? (
+                  {displayedTranscript ? (
                     <View style={styles.transcript}>
                       <Text style={styles.transcriptLabel}>Transcript</Text>
                       <Text selectable style={styles.transcriptText}>
-                        {recording.transcript}
+                        {displayedTranscript}
                       </Text>
                     </View>
                   ) : null}
