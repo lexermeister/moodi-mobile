@@ -72,11 +72,11 @@ After every newly finalized recording, the app:
 1. Keeps the verified M4A file in app document storage.
 2. Uploads it to `POST /recordings` as multipart field `file`.
 3. Calls `POST /recordings/{id}/transcription` using the returned backend ID.
-4. Saves the combined transcript, speaker turns, detected languages, backend ID, status, and retry
+4. Saves the combined transcript, client/therapist turns, detected languages, backend ID, status, and retry
    error in the local recording index.
 
-Completed transcripts display each `speaker_1` and `speaker_2` turn on its own line. Existing local
-recordings without saved speaker turns fall back to their combined transcript. Existing local
+Completed transcripts display each `Client` and `Therapist` turn on its own line. Existing local
+recordings without saved role turns fall back to their combined transcript. Existing local
 recordings show a **Transcribe** action. Failed requests show **Retry**. If the app closes during
 upload or transcription, the interrupted state becomes retryable on the next launch.
 

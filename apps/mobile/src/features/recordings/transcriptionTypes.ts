@@ -1,7 +1,7 @@
-export type TranscriptSpeaker = 'speaker_1' | 'speaker_2';
+export type TranscriptRole = 'client' | 'therapist';
 
 export type TranscriptTurn = {
-  speaker: TranscriptSpeaker;
+  role: TranscriptRole;
   text: string;
 };
 
@@ -12,7 +12,7 @@ export function isTranscriptTurn(value: unknown): value is TranscriptTurn {
 
   const turn = value as Partial<TranscriptTurn>;
   return (
-    (turn.speaker === 'speaker_1' || turn.speaker === 'speaker_2') &&
+    (turn.role === 'client' || turn.role === 'therapist') &&
     typeof turn.text === 'string' &&
     turn.text.trim().length > 0
   );

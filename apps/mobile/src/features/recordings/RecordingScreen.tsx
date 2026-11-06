@@ -149,7 +149,10 @@ export function RecordingScreen() {
               const processingStatus = recording.processingStatus ?? 'local';
               const displayedTranscript = recording.transcriptTurns?.length
                 ? recording.transcriptTurns
-                    .map((turn) => `${turn.speaker}: "${turn.text}"`)
+                    .map(
+                      (turn) =>
+                        `${turn.role === 'therapist' ? 'Therapist' : 'Client'}: "${turn.text}"`,
+                    )
                     .join('\n')
                 : recording.transcript;
               const isProcessing =
