@@ -14,12 +14,13 @@ import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Linking } from 'react-native';
 
-import { transcribeRecording, uploadRecording } from './recordingApi';
+import { generateSessionInsights, transcribeRecording, uploadRecording } from './recordingApi';
 import {
   deletePersistedRecording,
   getRecordingUri,
   loadRecordings,
   persistFinalizedRecording,
+  type RecordingFailedStage,
   type RecordingMetadata,
   updatePersistedRecording,
 } from './recordingStorage';
@@ -41,6 +42,14 @@ const recordingOptions = {
 
 function messageFrom(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function localDateFromIso(isoDate: string) {
+  const date = new Date(isoDate);
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
@@ -148,6 +157,9 @@ export function useRecordingLibrary() {
 
       processingIdsRef.current.add(recording.id);
       let current = recording;
+      let failedStage: RecordingFailedStage = current.backendRecordingId
+        ? 'transcription'
+        : 'upload';
 
       try {
         let backendRecordingId = current.backendRecordingId;
@@ -160,25 +172,45 @@ export function useRecordingLibrary() {
           backendRecordingId = uploaded.id;
         }
 
+        failedStage = 'transcription';
         current = await saveRecordingUpdate(current, {
           backendRecordingId,
+          failedStage: undefined,
           processingError: undefined,
           processingStatus: 'transcribing',
         });
 
         const transcription = await transcribeRecording(backendRecordingId);
-        await saveRecordingUpdate(current, {
+        current = await saveRecordingUpdate(current, {
           processingError: undefined,
-          processingStatus: 'completed',
+          processingStatus: 'ready_for_insights',
           transcript: transcription.text,
           transcriptTurns: transcription.turns,
           transcriptionLanguages: transcription.languages.map((language) => language.code),
+        });
+
+        failedStage = 'insights';
+        current = await saveRecordingUpdate(current, {
+          failedStage: undefined,
+          processingError: undefined,
+          processingStatus: 'generating_insights',
+        });
+        const insights = await generateSessionInsights(
+          backendRecordingId,
+          current.sessionDate ?? localDateFromIso(current.createdAt),
+        );
+        await saveRecordingUpdate(current, {
+          failedStage: undefined,
+          processingError: undefined,
+          processingStatus: 'completed',
+          sessionInsights: insights,
         });
       } catch (processingError) {
         try {
           await saveRecordingUpdate(current, {
             processingError: messageFrom(processingError, 'The recording could not be processed.'),
             processingStatus: 'failed',
+            failedStage,
           });
         } catch {
           // The recording may have been deleted while its network request was in flight.
@@ -222,10 +254,9 @@ export function useRecordingLibrary() {
             ? 'Saved after Moodi left the foreground.'
             : reason === 'interruption'
               ? 'Saved after an audio interruption.'
-              : 'Saved',
+              : 'Saved. Generate insights when you are ready.',
         );
         setError(null);
-        void processRecording(recording);
       } catch (finishError) {
         setNotice(null);
         setError(messageFrom(finishError, 'The recording could not be finalized.'));
@@ -236,7 +267,7 @@ export function useRecordingLibrary() {
         updatePhase('idle');
       }
     },
-    [processRecording, recorder, resetAudioSession, updatePhase],
+    [recorder, resetAudioSession, updatePhase],
   );
 
   const startRecording = useCallback(async () => {
@@ -395,7 +426,7 @@ export function useRecordingLibrary() {
     [playingId, stopPlayback],
   );
 
-  const retryProcessing = useCallback(
+  const generateInsights = useCallback(
     (recording: RecordingMetadata) => {
       void processRecording(recording);
     },
@@ -410,11 +441,18 @@ export function useRecordingLibrary() {
         for (const recording of savedRecordings) {
           if (
             recording.processingStatus === 'uploading' ||
-            recording.processingStatus === 'transcribing'
+            recording.processingStatus === 'transcribing' ||
+            recording.processingStatus === 'generating_insights'
           ) {
             recoveredRecordings.push(
               await updatePersistedRecording({
                 ...recording,
+                failedStage:
+                  recording.processingStatus === 'uploading'
+                    ? 'upload'
+                    : recording.processingStatus === 'generating_insights'
+                      ? 'insights'
+                      : 'transcription',
                 processingError: 'Processing was interrupted. Tap Retry to continue.',
                 processingStatus: 'failed',
               }),
@@ -518,7 +556,7 @@ export function useRecordingLibrary() {
     permission,
     playingId: playerStatus.playing ? playingId : null,
     recordings,
-    retryProcessing,
+    generateInsights,
     shareRecording,
     togglePlayback,
     toggleRecording,

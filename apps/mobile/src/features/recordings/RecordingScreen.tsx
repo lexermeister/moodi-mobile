@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { RecordingMetadata } from './recordingStorage';
+import { SessionInsightsCard } from './SessionInsightsCard';
 import { useRecordingLibrary } from './useRecordingLibrary';
 
 function formatDuration(durationMs: number) {
@@ -25,6 +26,26 @@ function formatDate(isoDate: string) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(isoDate));
+}
+
+function getProcessingLabel(recording: RecordingMetadata) {
+  switch (recording.processingStatus ?? 'local') {
+    case 'uploading':
+      return 'Uploading…';
+    case 'transcribing':
+      return 'Transcribing and identifying speakers…';
+    case 'generating_insights':
+      return 'Generating session insights…';
+    case 'completed':
+      return 'Insights ready';
+    case 'failed':
+      if (recording.failedStage === 'insights') return 'Insight generation failed';
+      if (recording.failedStage === 'transcription') return 'Transcription failed';
+      return 'Upload failed';
+    case 'local':
+    case 'ready_for_insights':
+      return 'Ready to generate insights';
+  }
 }
 
 export function RecordingScreen() {
@@ -53,7 +74,9 @@ export function RecordingScreen() {
         <View style={styles.header}>
           <Text style={styles.eyebrow}>MOODI</Text>
           <Text style={styles.title}>Capture this moment.</Text>
-          <Text style={styles.subtitle}>Saved on this device, then sent for transcription.</Text>
+          <Text style={styles.subtitle}>
+            Saved on this device until you choose to generate session insights.
+          </Text>
         </View>
 
         <View style={styles.recorderCard}>
@@ -103,7 +126,7 @@ export function RecordingScreen() {
             <View style={styles.permissionCopy}>
               <Text style={styles.permissionTitle}>Microphone access needed</Text>
               <Text style={styles.permissionBody}>
-                Moodi needs microphone permission to record your audio before transcription.
+                Moodi needs microphone permission to record audio for session insights.
               </Text>
             </View>
             {!library.permission.canAskAgain ? (
@@ -145,28 +168,13 @@ export function RecordingScreen() {
           <View style={styles.list}>
             {library.recordings.map((recording) => {
               const isPlaying = library.playingId === recording.id;
-              const actionsDisabled = library.isRecording || library.isBusy;
               const processingStatus = recording.processingStatus ?? 'local';
-              const displayedTranscript = recording.transcriptTurns?.length
-                ? recording.transcriptTurns
-                    .map(
-                      (turn) =>
-                        `${turn.role === 'therapist' ? 'Therapist' : 'Client'}: "${turn.text}"`,
-                    )
-                    .join('\n')
-                : recording.transcript;
               const isProcessing =
-                processingStatus === 'uploading' || processingStatus === 'transcribing';
-              const processingLabel =
-                processingStatus === 'uploading'
-                  ? 'Uploading…'
-                  : processingStatus === 'transcribing'
-                    ? 'Transcribing…'
-                    : processingStatus === 'completed'
-                      ? `Transcribed${recording.transcriptionLanguages?.length ? ` · ${recording.transcriptionLanguages.join(', ')}` : ''}`
-                      : processingStatus === 'failed'
-                        ? 'Processing failed'
-                        : 'Not transcribed';
+                processingStatus === 'uploading' ||
+                processingStatus === 'transcribing' ||
+                processingStatus === 'generating_insights';
+              const actionsDisabled = library.isRecording || library.isBusy || isProcessing;
+              const processingLabel = getProcessingLabel(recording);
 
               return (
                 <View key={recording.id} style={styles.recordingCard}>
@@ -232,23 +240,25 @@ export function RecordingScreen() {
                       ]}>
                       {processingLabel}
                     </Text>
-                    {processingStatus === 'local' || processingStatus === 'failed' ? (
+                    {processingStatus === 'local' ||
+                    processingStatus === 'ready_for_insights' ||
+                    processingStatus === 'failed' ? (
                       <Pressable
                         accessibilityLabel={
                           processingStatus === 'failed'
-                            ? 'Retry transcription'
-                            : 'Transcribe recording'
+                            ? 'Retry session insights generation'
+                            : 'Generate session insights'
                         }
                         accessibilityRole="button"
                         disabled={actionsDisabled}
-                        onPress={() => library.retryProcessing(recording)}
+                        onPress={() => library.generateInsights(recording)}
                         style={({ pressed }) => [
                           styles.retryButton,
                           pressed && styles.pressed,
                           actionsDisabled && styles.disabled,
                         ]}>
                         <Text style={styles.retryText}>
-                          {processingStatus === 'failed' ? 'Retry' : 'Transcribe'}
+                          {processingStatus === 'failed' ? 'Retry' : 'Generate session insights'}
                         </Text>
                       </Pressable>
                     ) : null}
@@ -258,14 +268,7 @@ export function RecordingScreen() {
                     <Text style={styles.processingError}>{recording.processingError}</Text>
                   ) : null}
 
-                  {displayedTranscript ? (
-                    <View style={styles.transcript}>
-                      <Text style={styles.transcriptLabel}>Transcript</Text>
-                      <Text selectable style={styles.transcriptText}>
-                        {displayedTranscript}
-                      </Text>
-                    </View>
-                  ) : null}
+                  <SessionInsightsCard recording={recording} />
                 </View>
               );
             })}
@@ -400,9 +403,6 @@ const styles = StyleSheet.create({
   },
   retryText: { color: colors.accentDark, fontSize: 13, fontWeight: '800' },
   processingError: { color: '#982e22', fontSize: 12, lineHeight: 17 },
-  transcript: { backgroundColor: '#f5f0e7', borderRadius: 12, gap: 4, padding: 12 },
-  transcriptLabel: { color: colors.muted, fontSize: 12, fontWeight: '800' },
-  transcriptText: { color: colors.ink, fontSize: 14, lineHeight: 21 },
   pressed: { opacity: 0.68 },
   disabled: { opacity: 0.45 },
 });

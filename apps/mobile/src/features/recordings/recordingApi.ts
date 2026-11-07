@@ -1,8 +1,14 @@
 import { File, UploadType } from 'expo-file-system';
 
+import {
+  isSessionInsightsResponse,
+  type SessionInsightsResponse,
+} from './sessionInsightsTypes';
 import { isTranscriptTurn, type TranscriptTurn } from './transcriptionTypes';
 
-const REQUEST_TIMEOUT_MS = 120_000;
+const UPLOAD_TIMEOUT_MS = 120_000;
+const TRANSCRIPTION_TIMEOUT_MS = 300_000;
+const INSIGHTS_TIMEOUT_MS = 180_000;
 
 type UploadRecordingResponse = {
   id: string;
@@ -105,7 +111,7 @@ export async function uploadRecording(uri: string): Promise<UploadRecordingRespo
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
 
   try {
     const result = await file.upload(`${getApiUrl()}/recordings`, {
@@ -144,7 +150,7 @@ export async function uploadRecording(uri: string): Promise<UploadRecordingRespo
 
 export async function transcribeRecording(recordingId: string): Promise<TranscriptionResponse> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), TRANSCRIPTION_TIMEOUT_MS);
 
   try {
     const response = await fetch(`${getApiUrl()}/recordings/${recordingId}/transcription`, {
@@ -171,6 +177,47 @@ export async function transcribeRecording(recordingId: string): Promise<Transcri
     }
     if (controller.signal.aborted) {
       throw new MoodiApiError('The transcription request timed out.');
+    }
+    throw new MoodiApiError('Could not reach the Moodi backend.');
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function generateSessionInsights(
+  recordingId: string,
+  sessionDate: string,
+): Promise<SessionInsightsResponse> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), INSIGHTS_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${getApiUrl()}/recordings/${recordingId}/insights`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_date: sessionDate }),
+      signal: controller.signal,
+    });
+    const body = await response.text();
+
+    if (!response.ok) {
+      throw new MoodiApiError(
+        errorMessage(body, 'Session insights could not be generated.'),
+        response.status,
+      );
+    }
+
+    const payload = parseJson(body);
+    if (!isSessionInsightsResponse(payload)) {
+      throw new MoodiApiError('The Moodi backend returned an invalid session insights response.');
+    }
+    return payload;
+  } catch (error) {
+    if (error instanceof MoodiApiError) {
+      throw error;
+    }
+    if (controller.signal.aborted) {
+      throw new MoodiApiError('The session insights request timed out.');
     }
     throw new MoodiApiError('Could not reach the Moodi backend.');
   } finally {

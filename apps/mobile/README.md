@@ -1,7 +1,9 @@
 # Moodi mobile
 
-The app records and stores verified M4A files locally, then uploads them to the configured Moodi
-backend and displays the returned diarized transcript one speaker turn per line.
+The app records and stores verified M4A files locally. When the user taps **Generate session
+insights**, it uploads the recording, requests a client/therapist transcript, generates structured
+insights, and keeps the transcript available as secondary detail. Completed stages are persisted so
+a retry does not repeat successful work.
 
 ## Backend configuration
 

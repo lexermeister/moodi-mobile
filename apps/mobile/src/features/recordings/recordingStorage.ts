@@ -1,11 +1,16 @@
 import { Directory, File, FileMode, Paths } from 'expo-file-system';
 
+import {
+  isSessionInsightsResponse,
+  type SessionInsightsResponse,
+} from './sessionInsightsTypes';
 import { isTranscriptTurn, type TranscriptTurn } from './transcriptionTypes';
 
 export type RecordingMetadata = {
   id: string;
   fileName: string;
   createdAt: string;
+  sessionDate?: string;
   durationMs: number;
   sizeBytes: number;
   backendRecordingId?: string;
@@ -14,12 +19,18 @@ export type RecordingMetadata = {
   transcript?: string;
   transcriptTurns?: TranscriptTurn[];
   transcriptionLanguages?: string[];
+  sessionInsights?: SessionInsightsResponse;
+  failedStage?: RecordingFailedStage;
 };
+
+export type RecordingFailedStage = 'upload' | 'transcription' | 'insights';
 
 export type RecordingProcessingStatus =
   | 'local'
   | 'uploading'
   | 'transcribing'
+  | 'ready_for_insights'
+  | 'generating_insights'
   | 'completed'
   | 'failed';
 
@@ -40,6 +51,8 @@ function isRecordingMetadata(value: unknown): value is RecordingMetadata {
     'local',
     'uploading',
     'transcribing',
+    'ready_for_insights',
+    'generating_insights',
     'completed',
     'failed',
   ];
@@ -50,6 +63,7 @@ function isRecordingMetadata(value: unknown): value is RecordingMetadata {
     item.fileName.endsWith('.m4a') &&
     typeof item.createdAt === 'string' &&
     Number.isFinite(Date.parse(item.createdAt)) &&
+    (item.sessionDate === undefined || /^\d{4}-\d{2}-\d{2}$/.test(item.sessionDate)) &&
     typeof item.durationMs === 'number' &&
     item.durationMs >= 0 &&
     typeof item.sizeBytes === 'number' &&
@@ -62,8 +76,18 @@ function isRecordingMetadata(value: unknown): value is RecordingMetadata {
       (Array.isArray(item.transcriptTurns) && item.transcriptTurns.every(isTranscriptTurn))) &&
     (item.transcriptionLanguages === undefined ||
       (Array.isArray(item.transcriptionLanguages) &&
-        item.transcriptionLanguages.every((language) => typeof language === 'string')))
+        item.transcriptionLanguages.every((language) => typeof language === 'string'))) &&
+    (item.sessionInsights === undefined || isSessionInsightsResponse(item.sessionInsights)) &&
+    (item.failedStage === undefined ||
+      ['upload', 'transcription', 'insights'].includes(item.failedStage))
   );
+}
+
+function localDate(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function createId(createdAt: Date) {
@@ -137,15 +161,27 @@ export async function loadRecordings(): Promise<RecordingMetadata[]> {
     return [];
   }
 
+  let needsRewrite = false;
   const valid = parsed
     .filter(isRecordingMetadata)
     .filter((recording) => {
       const file = new File(recordingsDirectory, recording.fileName);
       return isVerifiedM4A(file);
     })
+    .map((recording) => {
+      if (
+        recording.processingStatus === 'completed' &&
+        !recording.sessionInsights &&
+        recording.transcript
+      ) {
+        needsRewrite = true;
+        return { ...recording, processingStatus: 'ready_for_insights' as const };
+      }
+      return recording;
+    })
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 
-  if (valid.length !== parsed.length) {
+  if (valid.length !== parsed.length || needsRewrite) {
     await writeIndex(valid);
   }
 
@@ -184,6 +220,7 @@ export async function persistFinalizedRecording({
     id,
     fileName,
     createdAt: createdAt.toISOString(),
+    sessionDate: localDate(createdAt),
     durationMs: Math.max(0, Math.round(durationMs)),
     sizeBytes: destination.size,
     processingStatus: 'local',
