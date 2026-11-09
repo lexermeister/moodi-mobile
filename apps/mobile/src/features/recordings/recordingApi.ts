@@ -23,8 +23,8 @@ export type TranscriptionResponse = {
   turns: TranscriptTurn[];
   languages: { code: string }[];
   model: string;
-  role_model: string;
-  role_prompt_version: string;
+  role_model: string | null;
+  role_prompt_version: string | null;
   status: 'completed';
   completed_at: string;
 };
@@ -97,8 +97,9 @@ function isTranscriptionResponse(value: unknown): value is TranscriptionResponse
         typeof (language as { code?: unknown }).code === 'string',
     ) &&
     typeof response.model === 'string' &&
-    typeof response.role_model === 'string' &&
-    typeof response.role_prompt_version === 'string' &&
+    (response.role_model === null || typeof response.role_model === 'string') &&
+    (response.role_prompt_version === null ||
+      typeof response.role_prompt_version === 'string') &&
     response.status === 'completed' &&
     typeof response.completed_at === 'string'
   );
