@@ -14,7 +14,12 @@ import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Linking } from 'react-native';
 
-import { generateSessionInsights, transcribeRecording, uploadRecording } from './recordingApi';
+import {
+  generateSessionInsights,
+  saveSessionInsightsReview,
+  transcribeRecording,
+  uploadRecording,
+} from './recordingApi';
 import {
   deletePersistedRecording,
   getRecordingUri,
@@ -24,6 +29,10 @@ import {
   type RecordingMetadata,
   updatePersistedRecording,
 } from './recordingStorage';
+import type {
+  SessionInsightsReviewRequest,
+  SessionInsightsReviewResponse,
+} from './sessionInsightsReviewTypes';
 
 type Phase = 'idle' | 'starting' | 'recording' | 'stopping';
 type StopReason = 'button' | 'background' | 'interruption';
@@ -204,6 +213,10 @@ export function useRecordingLibrary() {
           processingError: undefined,
           processingStatus: 'completed',
           sessionInsights: insights,
+          sessionInsightsReview:
+            current.sessionInsightsReview?.draft_id === insights.draft_id
+              ? current.sessionInsightsReview
+              : undefined,
         });
       } catch (processingError) {
         try {
@@ -433,6 +446,33 @@ export function useRecordingLibrary() {
     [processRecording],
   );
 
+  const saveInsightsReview = useCallback(
+    async (
+      recording: RecordingMetadata,
+      reviewRequest: SessionInsightsReviewRequest,
+    ): Promise<SessionInsightsReviewResponse> => {
+      if (!recording.backendRecordingId) {
+        throw new Error('Generate session insights before reviewing them.');
+      }
+
+      try {
+        setError(null);
+        setNotice(null);
+        const review = await saveSessionInsightsReview(
+          recording.backendRecordingId,
+          reviewRequest,
+        );
+        await saveRecordingUpdate(recording, { sessionInsightsReview: review });
+        setNotice('Reviewed insights saved.');
+        return review;
+      } catch (reviewError) {
+        setError(messageFrom(reviewError, 'Reviewed session insights could not be saved.'));
+        throw reviewError;
+      }
+    },
+    [saveRecordingUpdate],
+  );
+
   useEffect(() => {
     let active = true;
     Promise.all([loadRecordings(), getRecordingPermissionsAsync()])
@@ -557,6 +597,7 @@ export function useRecordingLibrary() {
     playingId: playerStatus.playing ? playingId : null,
     recordings,
     generateInsights,
+    saveInsightsReview,
     shareRecording,
     togglePlayback,
     toggleRecording,

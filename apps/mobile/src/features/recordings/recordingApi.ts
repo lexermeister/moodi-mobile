@@ -4,11 +4,17 @@ import {
   isSessionInsightsResponse,
   type SessionInsightsResponse,
 } from './sessionInsightsTypes';
+import {
+  isSessionInsightsReviewResponse,
+  type SessionInsightsReviewRequest,
+  type SessionInsightsReviewResponse,
+} from './sessionInsightsReviewTypes';
 import { isTranscriptTurn, type TranscriptTurn } from './transcriptionTypes';
 
 const UPLOAD_TIMEOUT_MS = 120_000;
 const TRANSCRIPTION_TIMEOUT_MS = 300_000;
 const INSIGHTS_TIMEOUT_MS = 180_000;
+const INSIGHTS_REVIEW_TIMEOUT_MS = 60_000;
 
 type UploadRecordingResponse = {
   id: string;
@@ -219,6 +225,87 @@ export async function generateSessionInsights(
     }
     if (controller.signal.aborted) {
       throw new MoodiApiError('The session insights request timed out.');
+    }
+    throw new MoodiApiError('Could not reach the Moodi backend.');
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function getSessionInsightsReview(
+  recordingId: string,
+): Promise<SessionInsightsReviewResponse | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), INSIGHTS_REVIEW_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${getApiUrl()}/recordings/${recordingId}/insights/review`, {
+      signal: controller.signal,
+    });
+    const body = await response.text();
+
+    if (response.status === 404) {
+      return null;
+    }
+    if (!response.ok) {
+      throw new MoodiApiError(
+        errorMessage(body, 'Reviewed session insights could not be loaded.'),
+        response.status,
+      );
+    }
+
+    const payload = parseJson(body);
+    if (!isSessionInsightsReviewResponse(payload)) {
+      throw new MoodiApiError('The Moodi backend returned an invalid insights review response.');
+    }
+    return payload;
+  } catch (error) {
+    if (error instanceof MoodiApiError) {
+      throw error;
+    }
+    if (controller.signal.aborted) {
+      throw new MoodiApiError('Loading the insights review timed out.');
+    }
+    throw new MoodiApiError('Could not reach the Moodi backend.');
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function saveSessionInsightsReview(
+  recordingId: string,
+  review: SessionInsightsReviewRequest,
+): Promise<SessionInsightsReviewResponse> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), INSIGHTS_REVIEW_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${getApiUrl()}/recordings/${recordingId}/insights/review`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(review),
+      signal: controller.signal,
+    });
+    const body = await response.text();
+
+    if (!response.ok) {
+      throw new MoodiApiError(
+        errorMessage(body, 'Reviewed session insights could not be saved.'),
+        response.status,
+      );
+    }
+
+    const payload = parseJson(body);
+    if (!isSessionInsightsReviewResponse(payload)) {
+      throw new MoodiApiError('The Moodi backend returned an invalid insights review response.');
+    }
+    return payload;
+  } catch (error) {
+    if (error instanceof MoodiApiError) {
+      throw error;
+    }
+    if (controller.signal.aborted) {
+      throw new MoodiApiError('Saving the insights review timed out.');
     }
     throw new MoodiApiError('Could not reach the Moodi backend.');
   } finally {

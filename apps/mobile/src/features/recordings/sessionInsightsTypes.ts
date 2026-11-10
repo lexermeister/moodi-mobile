@@ -33,6 +33,7 @@ export type ActionMention = {
 };
 
 export type InsightBullet = {
+  item_id?: string;
   text: string;
   fact_ids: string[];
   action_ids: string[];
@@ -87,6 +88,7 @@ export type SessionInsightsResult = {
 
 export type SessionInsightsResponse = {
   recording_id: string;
+  draft_id?: string;
   source_version: string;
   prompt_version: string;
   model: string;
@@ -159,6 +161,7 @@ function isBullet(value: unknown): value is InsightBullet {
     'coverage',
   ];
   return (
+    (value.item_id === undefined || typeof value.item_id === 'string') &&
     typeof value.text === 'string' &&
     isStringArray(value.fact_ids) &&
     isStringArray(value.action_ids) &&
@@ -231,6 +234,7 @@ export function isSessionInsightsResponse(value: unknown): value is SessionInsig
   if (!isObject(value)) return false;
   return (
     typeof value.recording_id === 'string' &&
+    (value.draft_id === undefined || typeof value.draft_id === 'string') &&
     typeof value.source_version === 'string' &&
     typeof value.prompt_version === 'string' &&
     typeof value.model === 'string' &&

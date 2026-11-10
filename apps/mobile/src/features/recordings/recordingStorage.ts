@@ -4,6 +4,10 @@ import {
   isSessionInsightsResponse,
   type SessionInsightsResponse,
 } from './sessionInsightsTypes';
+import {
+  isSessionInsightsReviewResponse,
+  type SessionInsightsReviewResponse,
+} from './sessionInsightsReviewTypes';
 import { isTranscriptTurn, type TranscriptTurn } from './transcriptionTypes';
 
 export type RecordingMetadata = {
@@ -20,6 +24,7 @@ export type RecordingMetadata = {
   transcriptTurns?: TranscriptTurn[];
   transcriptionLanguages?: string[];
   sessionInsights?: SessionInsightsResponse;
+  sessionInsightsReview?: SessionInsightsReviewResponse;
   failedStage?: RecordingFailedStage;
 };
 
@@ -78,6 +83,8 @@ function isRecordingMetadata(value: unknown): value is RecordingMetadata {
       (Array.isArray(item.transcriptionLanguages) &&
         item.transcriptionLanguages.every((language) => typeof language === 'string'))) &&
     (item.sessionInsights === undefined || isSessionInsightsResponse(item.sessionInsights)) &&
+    (item.sessionInsightsReview === undefined ||
+      isSessionInsightsReviewResponse(item.sessionInsightsReview)) &&
     (item.failedStage === undefined ||
       ['upload', 'transcription', 'insights'].includes(item.failedStage))
   );

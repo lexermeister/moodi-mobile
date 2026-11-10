@@ -3,7 +3,9 @@
 The app records and stores verified M4A files locally. When the user taps **Generate session
 insights**, it uploads the recording, requests a client/therapist transcript, generates structured
 insights, and keeps the transcript available as secondary detail. Completed stages are persisted so
-a retry does not repeat successful work.
+a retry does not repeat successful work. Generated insights remain an immutable draft; the user can
+edit or remove visible bullets and save a separate reviewed version that persists locally and on the
+backend.
 
 ## Backend configuration
 

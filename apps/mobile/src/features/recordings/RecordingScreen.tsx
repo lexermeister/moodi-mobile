@@ -175,6 +175,10 @@ export function RecordingScreen() {
                 processingStatus === 'generating_insights';
               const actionsDisabled = library.isRecording || library.isBusy || isProcessing;
               const processingLabel = getProcessingLabel(recording);
+              const needsReviewUpgrade =
+                processingStatus === 'completed' &&
+                Boolean(recording.sessionInsights) &&
+                !recording.sessionInsights?.draft_id;
 
               return (
                 <View key={recording.id} style={styles.recordingCard}>
@@ -242,11 +246,14 @@ export function RecordingScreen() {
                     </Text>
                     {processingStatus === 'local' ||
                     processingStatus === 'ready_for_insights' ||
-                    processingStatus === 'failed' ? (
+                    processingStatus === 'failed' ||
+                    needsReviewUpgrade ? (
                       <Pressable
                         accessibilityLabel={
                           processingStatus === 'failed'
                             ? 'Retry session insights generation'
+                            : needsReviewUpgrade
+                              ? 'Update session insights for editing'
                             : 'Generate session insights'
                         }
                         accessibilityRole="button"
@@ -258,7 +265,11 @@ export function RecordingScreen() {
                           actionsDisabled && styles.disabled,
                         ]}>
                         <Text style={styles.retryText}>
-                          {processingStatus === 'failed' ? 'Retry' : 'Generate session insights'}
+                          {processingStatus === 'failed'
+                            ? 'Retry'
+                            : needsReviewUpgrade
+                              ? 'Enable editing'
+                              : 'Generate session insights'}
                         </Text>
                       </Pressable>
                     ) : null}
@@ -268,7 +279,10 @@ export function RecordingScreen() {
                     <Text style={styles.processingError}>{recording.processingError}</Text>
                   ) : null}
 
-                  <SessionInsightsCard recording={recording} />
+                  <SessionInsightsCard
+                    onSaveReview={library.saveInsightsReview}
+                    recording={recording}
+                  />
                 </View>
               );
             })}
