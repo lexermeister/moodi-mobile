@@ -28,6 +28,10 @@ export type RecordingMetadata = {
   failedStage?: RecordingFailedStage;
 };
 
+type StoredRecordingMetadata = Omit<RecordingMetadata, 'sessionInsights'> & {
+  sessionInsights?: unknown;
+};
+
 export type RecordingFailedStage = 'upload' | 'transcription' | 'insights';
 
 export type RecordingProcessingStatus =
@@ -46,7 +50,7 @@ function ensureRecordingsDirectory() {
   recordingsDirectory.create({ idempotent: true, intermediates: true });
 }
 
-function isRecordingMetadata(value: unknown): value is RecordingMetadata {
+function isRecordingMetadata(value: unknown): value is StoredRecordingMetadata {
   if (!value || typeof value !== 'object') {
     return false;
   }
@@ -82,7 +86,7 @@ function isRecordingMetadata(value: unknown): value is RecordingMetadata {
     (item.transcriptionLanguages === undefined ||
       (Array.isArray(item.transcriptionLanguages) &&
         item.transcriptionLanguages.every((language) => typeof language === 'string'))) &&
-    (item.sessionInsights === undefined || isSessionInsightsResponse(item.sessionInsights)) &&
+    (item.sessionInsights === undefined || typeof item.sessionInsights === 'object') &&
     (item.sessionInsightsReview === undefined ||
       isSessionInsightsReviewResponse(item.sessionInsightsReview)) &&
     (item.failedStage === undefined ||
@@ -177,14 +181,33 @@ export async function loadRecordings(): Promise<RecordingMetadata[]> {
     })
     .map((recording) => {
       if (
-        recording.processingStatus === 'completed' &&
-        !recording.sessionInsights &&
-        recording.transcript
+        recording.sessionInsights !== undefined &&
+        !isSessionInsightsResponse(recording.sessionInsights)
       ) {
         needsRewrite = true;
-        return { ...recording, processingStatus: 'ready_for_insights' as const };
+        const {
+          sessionInsights: _staleInsights,
+          sessionInsightsReview: _staleReview,
+          ...current
+        } = recording;
+        return {
+          ...current,
+          processingStatus: current.transcript ? ('ready_for_insights' as const) : ('local' as const),
+        };
       }
-      return recording;
+      const currentRecording: RecordingMetadata = {
+        ...recording,
+        sessionInsights: recording.sessionInsights,
+      };
+      if (
+        currentRecording.processingStatus === 'completed' &&
+        !currentRecording.sessionInsights &&
+        currentRecording.transcript
+      ) {
+        needsRewrite = true;
+        return { ...currentRecording, processingStatus: 'ready_for_insights' as const };
+      }
+      return currentRecording;
     })
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 

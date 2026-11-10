@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { RecordMoodActionCard } from '../actions/RecordMoodActionCard';
 import type { RecordingMetadata } from './recordingStorage';
 import { SessionInsightsEditor } from './SessionInsightsEditor';
 import type { SessionInsightsReviewRequest } from './sessionInsightsReviewTypes';
@@ -152,6 +153,13 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
               <Text style={styles.disclaimer}>
                 AI-generated from the recording. Review for accuracy; this is not medical advice.
               </Text>
+
+              <RecordMoodActionCard
+                candidate={insights.action_candidates[0]}
+                draftId={draftId}
+                recordingId={recording.backendRecordingId}
+                sourceVersion={recording.sessionInsights?.source_version ?? insights.source_version}
+              />
             </>
           )}
         </View>

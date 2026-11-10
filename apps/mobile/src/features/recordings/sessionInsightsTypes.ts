@@ -1,3 +1,8 @@
+import {
+  isRecordMoodCandidate,
+  type RecordMoodCandidate,
+} from '../actions/actionTypes';
+
 export type InsightVariant = 'P01' | 'P02' | 'P03';
 
 export type InsightFact = {
@@ -16,27 +21,11 @@ export type InsightFact = {
   source_ids: string[];
 };
 
-export type ActionMention = {
-  id: string;
-  status: 'agreed' | 'suggested' | 'declined' | 'unresolved' | 'superseded';
-  eligibility: 'review_candidate' | 'clarify' | 'not_eligible';
-  actor: 'client' | 'therapist' | 'shared' | 'unknown';
-  activity: string;
-  source_excerpt: string;
-  frequency: string | null;
-  timing: string | null;
-  duration: string | null;
-  condition: string | null;
-  endpoint: string | null;
-  replaces_action_id: string | null;
-  source_ids: string[];
-};
-
 export type InsightBullet = {
   item_id?: string;
   text: string;
   fact_ids: string[];
-  action_ids: string[];
+  candidate_ids: string[];
   module:
     | 'practice_details'
     | 'progress_and_barriers'
@@ -69,7 +58,7 @@ export type InsightReviewFlag = {
     | 'safety_sensitive_content';
   detail: string;
   source_ids: string[];
-  action_ids: string[];
+  candidate_ids: string[];
 };
 
 export type SessionInsightsResult = {
@@ -81,7 +70,7 @@ export type SessionInsightsResult = {
   secondary_variant: InsightVariant | null;
   selection_note: string | null;
   facts: InsightFact[];
-  action_mentions: ActionMention[];
+  action_candidates: RecordMoodCandidate[];
   sections: InsightSection[];
   review_flags: InsightReviewFlag[];
 };
@@ -99,7 +88,6 @@ export type SessionInsightsResponse = {
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
 }
-
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
@@ -130,27 +118,6 @@ function isFact(value: unknown): value is InsightFact {
   );
 }
 
-function isAction(value: unknown): value is ActionMention {
-  if (!isObject(value)) return false;
-  return (
-    typeof value.id === 'string' &&
-    ['agreed', 'suggested', 'declined', 'unresolved', 'superseded'].includes(
-      value.status as string,
-    ) &&
-    ['review_candidate', 'clarify', 'not_eligible'].includes(value.eligibility as string) &&
-    ['client', 'therapist', 'shared', 'unknown'].includes(value.actor as string) &&
-    typeof value.activity === 'string' &&
-    typeof value.source_excerpt === 'string' &&
-    isNullableString(value.frequency) &&
-    isNullableString(value.timing) &&
-    isNullableString(value.duration) &&
-    isNullableString(value.condition) &&
-    isNullableString(value.endpoint) &&
-    isNullableString(value.replaces_action_id) &&
-    isStringArray(value.source_ids)
-  );
-}
-
 function isBullet(value: unknown): value is InsightBullet {
   if (!isObject(value)) return false;
   const modules = [
@@ -164,7 +131,7 @@ function isBullet(value: unknown): value is InsightBullet {
     (value.item_id === undefined || typeof value.item_id === 'string') &&
     typeof value.text === 'string' &&
     isStringArray(value.fact_ids) &&
-    isStringArray(value.action_ids) &&
+    isStringArray(value.candidate_ids) &&
     (value.module === null || (typeof value.module === 'string' && modules.includes(value.module)))
   );
 }
@@ -204,7 +171,7 @@ function isReviewFlag(value: unknown): value is InsightReviewFlag {
     codes.includes(value.code) &&
     typeof value.detail === 'string' &&
     isStringArray(value.source_ids) &&
-    isStringArray(value.action_ids)
+    isStringArray(value.candidate_ids)
   );
 }
 
@@ -221,8 +188,8 @@ function isResult(value: unknown): value is SessionInsightsResult {
     isNullableString(value.selection_note) &&
     Array.isArray(value.facts) &&
     value.facts.every(isFact) &&
-    Array.isArray(value.action_mentions) &&
-    value.action_mentions.every(isAction) &&
+    Array.isArray(value.action_candidates) &&
+    value.action_candidates.every(isRecordMoodCandidate) &&
     Array.isArray(value.sections) &&
     value.sections.every(isSection) &&
     Array.isArray(value.review_flags) &&
