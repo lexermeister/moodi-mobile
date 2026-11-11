@@ -4,6 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import {
   amendMoodEntry,
   confirmMoodEntry,
+  deleteMoodAction,
   deleteMoodEntry,
   exportMoodEntries,
   getMoodAction,
@@ -152,6 +153,24 @@ export function useMoodActionDetail(actionId?: string) {
     [actionId],
   );
 
+  const removeAction = useCallback(async () => {
+    if (!actionId) return false;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await deleteMoodAction(actionId);
+      setAction(null);
+      setEntries([]);
+      return true;
+    } catch (deleteError) {
+      setError(messageFrom(deleteError, 'The Action could not be deleted.'));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }, [actionId]);
+
   const prepareExport = useCallback(
     async (entryIds: string[]) => {
       if (!actionId) return null;
@@ -179,6 +198,7 @@ export function useMoodActionDetail(actionId?: string) {
     notice,
     prepareExport,
     reload: load,
+    removeAction,
     removeEntry,
     saveConfirmed,
     saveDraft,

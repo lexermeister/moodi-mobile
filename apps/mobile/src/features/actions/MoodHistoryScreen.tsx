@@ -129,6 +129,25 @@ export function MoodHistoryScreen({ actionId }: Props) {
     ]);
   };
 
+  const confirmDeleteAction = () => {
+    Alert.alert(
+      'Permanently delete this Action?',
+      'This deletes the Action and all of its saved mood entries and drafts. Your original session insights will remain. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Action',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              if (await detail.removeAction()) router.replace('/actions');
+            })();
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <View style={styles.screen}>
       <View style={styles.coverageCard}>
@@ -251,6 +270,31 @@ export function MoodHistoryScreen({ actionId }: Props) {
           <Text style={styles.coverageNote}>Your saved check-ins will appear here.</Text>
         </View>
       )}
+
+      {!selecting ? (
+        <View style={styles.dangerCard}>
+          <View style={styles.dangerCopy}>
+            <Text style={styles.dangerTitle}>Delete Action</Text>
+            <Text style={styles.coverageNote}>
+              Permanently remove this Action and all of its mood entries and drafts.
+            </Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: detail.busy }}
+            disabled={detail.busy}
+            onPress={confirmDeleteAction}
+            style={({ pressed }) => [
+              styles.dangerButton,
+              detail.busy && styles.disabled,
+              pressed && styles.pressed,
+            ]}>
+            <Text style={styles.dangerButtonText}>
+              {detail.busy ? 'Deleting…' : 'Delete Action'}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -315,6 +359,26 @@ const styles = StyleSheet.create({
   messageCard: { alignItems: 'flex-start', backgroundColor: '#fff', borderRadius: 14, gap: 10, padding: 16 },
   emptyCard: { backgroundColor: '#fff', borderRadius: 14, gap: 4, padding: 16 },
   emptyTitle: { color: colors.ink, fontSize: 15, fontWeight: '900' },
+  dangerCard: {
+    alignItems: 'flex-start',
+    backgroundColor: '#fff4f1',
+    borderColor: '#efc9c1',
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 12,
+    padding: 15,
+  },
+  dangerCopy: { gap: 4 },
+  dangerTitle: { color: '#982e22', fontSize: 15, fontWeight: '900' },
+  dangerButton: {
+    borderColor: '#982e22',
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  dangerButtonText: { color: '#982e22', fontSize: 12, fontWeight: '900' },
+  disabled: { opacity: 0.45 },
   errorText: { color: '#982e22', fontSize: 13, lineHeight: 18 },
   noticeText: { color: '#23613a', fontSize: 12, fontWeight: '700' },
   pressed: { opacity: 0.65 },

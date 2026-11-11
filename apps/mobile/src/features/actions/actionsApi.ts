@@ -80,6 +80,15 @@ export async function getMoodAction(actionId: string): Promise<MoodAction> {
   return payload;
 }
 
+export async function deleteMoodAction(actionId: string): Promise<void> {
+  try {
+    await requestJson(`/actions/${encodeURIComponent(actionId)}`, { method: 'DELETE' });
+  } catch (error) {
+    if (error instanceof ActionsApiError && error.status === 404) return;
+    throw error;
+  }
+}
+
 export async function reviewMoodCandidate({
   recordingId,
   candidateId,
@@ -230,7 +239,10 @@ export async function amendMoodEntry({
 }
 
 export async function deleteMoodEntry(actionId: string, entryId: string): Promise<void> {
-  await requestJson(`/actions/${actionId}/entries/${entryId}`, { method: 'DELETE' });
+  await requestJson(
+    `/actions/${encodeURIComponent(actionId)}/entries/${encodeURIComponent(entryId)}`,
+    { method: 'DELETE' },
+  );
 }
 
 export async function exportMoodEntries(actionId: string, entryIds: string[]): Promise<unknown> {
