@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { RecordMoodActionCard } from '../actions/RecordMoodActionCard';
+import { AgreedActionsSection } from '../actions/AgreedActionsSection';
+import type { RecordMoodSessionState } from '../actions/RecordMoodActionCard';
 import type { RecordingMetadata } from './recordingStorage';
 import { SessionInsightsEditor } from './SessionInsightsEditor';
 import type { SessionInsightsReviewRequest } from './sessionInsightsReviewTypes';
@@ -17,6 +18,13 @@ type Props = {
 export function SessionInsightsCard({ recording, onSaveReview }: Props) {
   const [transcriptVisible, setTranscriptVisible] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [summaryNotice, setSummaryNotice] = useState<{ draftId: string; message: string } | null>(
+    null,
+  );
+  const [actionState, setActionState] = useState<{
+    key: string;
+    status: RecordMoodSessionState;
+  } | null>(null);
   const insights = recording.sessionInsights?.result;
   const draftId = recording.sessionInsights?.draft_id;
   const reviewableInsights =
@@ -33,6 +41,18 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
     savedReview.source_version === recording.sessionInsights?.source_version
       ? savedReview
       : undefined;
+  const actionCandidate = insights?.action_candidates[0];
+  const actionStateKey = `${draftId ?? 'no-draft'}:${
+    recording.sessionInsights?.source_version ?? 'no-source'
+  }:${actionCandidate?.id ?? 'no-action'}`;
+  const actionStatus =
+    actionState?.key === actionStateKey ? actionState.status : 'loading';
+  const handleActionStatusChange = useCallback(
+    (status: RecordMoodSessionState) => {
+      setActionState({ key: actionStateKey, status });
+    },
+    [actionStateKey],
+  );
   const displayedSections = useMemo(
     () =>
       review
@@ -77,94 +97,116 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
   return (
     <View style={styles.container}>
       {insights ? (
-        <View style={styles.insights}>
-          {editing && reviewableInsights ? (
-            <SessionInsightsEditor
-              insights={reviewableInsights}
-              onCancel={() => setEditing(false)}
-              onSave={async (request) => {
-                await onSaveReview(recording, request);
-                setEditing(false);
-              }}
-              review={review}
-            />
-          ) : (
-            <>
-              <View style={styles.titleRow}>
-                <Text style={styles.title}>Session insights</Text>
-                <Text style={[styles.statusBadge, review && styles.reviewedBadge]}>
-                  {review ? 'REVIEWED' : 'DRAFT'}
-                </Text>
-              </View>
-
-              {insights.status === 'insufficient_source' ? (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyTitle}>Not enough supported information</Text>
-                  <Text style={styles.emptyText}>
-                    Moodi could not generate reliable insights from the available transcript.
-                  </Text>
-                </View>
-              ) : displayedSections.some((section) => section.bullets.length) ? (
-                displayedSections.map((section) =>
-                  section.bullets.length ? (
-                    <View key={section.key} style={styles.section}>
-                      <Text style={styles.sectionHeading}>{section.heading}</Text>
-                      {section.bullets.map((bullet) => (
-                        <View key={bullet.itemId} style={styles.bulletRow}>
-                          <Text style={styles.bulletMark}>•</Text>
-                          <View style={styles.bulletCopy}>
-                            <Text selectable style={styles.bulletText}>
-                              {bullet.text}
-                            </Text>
-                            {bullet.edited ? (
-                              <Text style={styles.editedLabel}>Edited by you</Text>
-                            ) : null}
-                          </View>
-                        </View>
-                      ))}
-                    </View>
-                  ) : null,
-                )
-              ) : (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyTitle}>No insights retained</Text>
-                  <Text style={styles.emptyText}>You removed every generated insight.</Text>
-                </View>
-              )}
-
-              {insights.coverage_note ? (
-                <View style={styles.coverageNote}>
-                  <Text style={styles.coverageLabel}>Source note</Text>
-                  <Text style={styles.coverageText}>{insights.coverage_note}</Text>
-                </View>
-              ) : null}
-
-              {reviewableInsights ? (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setEditing(true)}
-                  style={({ pressed }) => [styles.reviewButton, pressed && styles.pressed]}>
-                  <Text style={styles.reviewButtonText}>
-                    {review ? 'Edit reviewed insights' : 'Review & edit'}
-                  </Text>
-                </Pressable>
-              ) : null}
-
-              <Text style={styles.disclaimer}>
-                AI-generated from the recording. Review for accuracy; this is not medical advice.
-              </Text>
-
-              <RecordMoodActionCard
-                candidate={insights.action_candidates[0]}
-                compactWhenActive
-                draftId={draftId}
-                key={`${recording.id}:${recording.sessionInsights?.source_version ?? insights.source_version}:${insights.action_candidates[0]?.id ?? 'none'}`}
-                recordingId={recording.backendRecordingId}
-                sourceVersion={recording.sessionInsights?.source_version ?? insights.source_version}
+        <>
+          <View style={styles.insights}>
+            {editing && reviewableInsights ? (
+              <SessionInsightsEditor
+                insights={reviewableInsights}
+                onCancel={() => setEditing(false)}
+                onSave={async (request) => {
+                  await onSaveReview(recording, request);
+                  setEditing(false);
+                  setSummaryNotice(
+                    actionCandidate && actionStatus === 'needs_setup'
+                      ? {
+                          draftId: reviewableInsights.draft_id,
+                          message:
+                            'Session summary reviewed. One agreed action still needs your review.',
+                        }
+                      : null,
+                  );
+                }}
+                review={review}
               />
-            </>
-          )}
-        </View>
+            ) : (
+              <>
+                <View style={styles.titleRow}>
+                  <Text style={styles.title}>Session summary</Text>
+                  <Text style={[styles.statusBadge, review && styles.reviewedBadge]}>
+                    {review ? 'REVIEWED' : 'NEEDS REVIEW'}
+                  </Text>
+                </View>
+
+                {summaryNotice && summaryNotice.draftId === draftId ? (
+                  <View accessibilityLiveRegion="polite" style={styles.summaryNotice}>
+                    <Text style={styles.summaryNoticeText}>✓ {summaryNotice.message}</Text>
+                  </View>
+                ) : null}
+
+                {insights.status === 'insufficient_source' ? (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyTitle}>Not enough supported information</Text>
+                    <Text style={styles.emptyText}>
+                      Moodi could not generate reliable insights from the available transcript.
+                    </Text>
+                  </View>
+                ) : displayedSections.some((section) => section.bullets.length) ? (
+                  displayedSections.map((section) =>
+                    section.bullets.length ? (
+                      <View key={section.key} style={styles.section}>
+                        <Text style={styles.sectionHeading}>{section.heading}</Text>
+                        {section.bullets.map((bullet) => (
+                          <View key={bullet.itemId} style={styles.bulletRow}>
+                            <Text style={styles.bulletMark}>•</Text>
+                            <View style={styles.bulletCopy}>
+                              <Text selectable style={styles.bulletText}>
+                                {bullet.text}
+                              </Text>
+                              {bullet.edited ? (
+                                <Text style={styles.editedLabel}>Edited by you</Text>
+                              ) : null}
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null,
+                  )
+                ) : (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyTitle}>No insights retained</Text>
+                    <Text style={styles.emptyText}>You removed every generated insight.</Text>
+                  </View>
+                )}
+
+                {insights.coverage_note ? (
+                  <View style={styles.coverageNote}>
+                    <Text style={styles.coverageLabel}>Source note</Text>
+                    <Text style={styles.coverageText}>{insights.coverage_note}</Text>
+                  </View>
+                ) : null}
+
+                {reviewableInsights ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setSummaryNotice(null);
+                      setEditing(true);
+                    }}
+                    style={({ pressed }) => [styles.reviewButton, pressed && styles.pressed]}>
+                    <Text style={styles.reviewButtonText}>
+                      {review ? 'Edit reviewed summary' : 'Review summary'}
+                    </Text>
+                  </Pressable>
+                ) : null}
+
+                <Text style={styles.disclaimer}>
+                  AI-generated from the recording. Review for accuracy; this is not medical advice.
+                </Text>
+              </>
+            )}
+          </View>
+
+          {actionCandidate ? (
+            <AgreedActionsSection
+              candidate={actionCandidate}
+              draftId={draftId}
+              key={`${recording.id}:${recording.sessionInsights?.source_version ?? insights.source_version}:${actionCandidate.id}`}
+              onStatusChange={handleActionStatusChange}
+              recordingId={recording.backendRecordingId}
+              sourceVersion={recording.sessionInsights?.source_version ?? insights.source_version}
+            />
+          ) : null}
+        </>
       ) : null}
 
       {displayedTranscript ? (
@@ -231,6 +273,8 @@ const styles = StyleSheet.create({
   coverageNote: { backgroundColor: '#fff8e8', borderRadius: 10, gap: 3, padding: 10 },
   coverageLabel: { color: '#725d36', fontSize: 11, fontWeight: '800' },
   coverageText: { color: '#725d36', fontSize: 12, lineHeight: 17 },
+  summaryNotice: { backgroundColor: '#e6f2e9', borderRadius: 10, padding: 10 },
+  summaryNoticeText: { color: '#23613a', fontSize: 12, fontWeight: '700', lineHeight: 17 },
   disclaimer: { color: colors.muted, fontSize: 11, lineHeight: 16 },
   reviewButton: {
     alignItems: 'center',

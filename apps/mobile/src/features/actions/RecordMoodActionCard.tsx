@@ -52,7 +52,15 @@ type Props = {
   sourceVersion?: string;
   candidate?: RecordMoodCandidate;
   compactWhenActive?: boolean;
+  onSessionStateChange?: (status: RecordMoodSessionState) => void;
 };
+
+export type RecordMoodSessionState =
+  | 'loading'
+  | 'needs_setup'
+  | 'active'
+  | 'not_added'
+  | 'error';
 
 function messageFrom(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
@@ -141,6 +149,7 @@ export function RecordMoodActionCard({
   sourceVersion,
   candidate,
   compactWhenActive = false,
+  onSessionStateChange,
 }: Props) {
   const router = useRouter();
   const [action, setAction] = useState<MoodAction | null>(null);
@@ -211,6 +220,7 @@ export function RecordMoodActionCard({
       return;
     }
     let active = true;
+    if (recordingId && candidate) onSessionStateChange?.('loading');
     const load = async () => {
       try {
         if (actionId) {
@@ -226,12 +236,33 @@ export function RecordMoodActionCard({
           ? await getMoodCandidateReview(recordingId, candidate.id)
           : null;
         if (!active) return;
-        const activeAction = review?.action ?? actions[0] ?? null;
+        const matchingAction = candidate
+          ? actions.find(
+              (item) =>
+                item.candidate_id === candidate.id && item.transcript_version === sourceVersion,
+            ) ?? null
+          : null;
+        const reviewedAction =
+          review?.action &&
+          review.action.candidate_id === candidate?.id &&
+          review.action.transcript_version === sourceVersion
+            ? review.action
+            : null;
+        const activeAction = review?.disposition === 'rejected'
+          ? null
+          : reviewedAction ?? matchingAction;
         setAction(activeAction);
-        setRejected(review?.disposition === 'rejected');
+        const wasRejected = review?.disposition === 'rejected';
+        setRejected(wasRejected);
+        onSessionStateChange?.(
+          activeAction ? 'active' : wasRejected ? 'not_added' : 'needs_setup',
+        );
         if (activeAction && !compactWhenActive) await refreshEntries(activeAction, true);
       } catch (loadError) {
-        if (active) setError(messageFrom(loadError, 'The Action could not be loaded.'));
+        if (active) {
+          setError(messageFrom(loadError, 'The Action could not be loaded.'));
+          onSessionStateChange?.('error');
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -240,7 +271,15 @@ export function RecordMoodActionCard({
     return () => {
       active = false;
     };
-  }, [actionId, candidate, compactWhenActive, recordingId, refreshEntries]);
+  }, [
+    actionId,
+    candidate,
+    compactWhenActive,
+    onSessionStateChange,
+    recordingId,
+    refreshEntries,
+    sourceVersion,
+  ]);
 
   const resetForm = useCallback(() => {
     const now = new Date();
@@ -297,12 +336,13 @@ export function RecordMoodActionCard({
       setAction(activated);
       setRejected(false);
       setNotice('Record mood Action activated.');
+      onSessionStateChange?.('active');
     } catch (activationError) {
       setError(messageFrom(activationError, 'The Action could not be activated.'));
     } finally {
       setBusy(false);
     }
-  }, [candidate, draftId, recordingId, reviewedSettings, sourceVersion]);
+  }, [candidate, draftId, onSessionStateChange, recordingId, reviewedSettings, sourceVersion]);
 
   const openScheduleEditor = useCallback(() => {
     if (!reviewedSettings) return;
@@ -367,12 +407,13 @@ export function RecordMoodActionCard({
       });
       setRejected(true);
       setNotice('Candidate dismissed. No Action was created.');
+      onSessionStateChange?.('not_added');
     } catch (reviewError) {
       setError(messageFrom(reviewError, 'The candidate review could not be saved.'));
     } finally {
       setBusy(false);
     }
-  }, [candidate, draftId, recordingId, sourceVersion]);
+  }, [candidate, draftId, onSessionStateChange, recordingId, sourceVersion]);
 
   const saveDraft = useCallback(async () => {
     if (!action || !values) return;
@@ -510,8 +551,10 @@ export function RecordMoodActionCard({
     if (rejected) {
       return (
         <View style={styles.candidateCard}>
-          <Text style={styles.candidateTitle}>Record mood candidate dismissed</Text>
-          <Text style={styles.supportingText}>No Action was created.</Text>
+          <Text style={styles.candidateTitle}>Mood check-ins not added</Text>
+          <Text style={styles.supportingText}>
+            You marked this as something that was not agreed in the session.
+          </Text>
         </View>
       );
     }
@@ -522,9 +565,9 @@ export function RecordMoodActionCard({
     return (
       <View style={styles.candidateCard}>
         <View style={styles.titleRow}>
-          <Text style={styles.candidateTitle}>Record mood Action found</Text>
+          <Text style={styles.candidateTitle}>Track your mood daily</Text>
           <Text style={styles.candidateBadge}>
-            REVIEW
+            NEEDS SETUP
           </Text>
         </View>
         <Text style={styles.taskText}>{candidate.exact_task}</Text>

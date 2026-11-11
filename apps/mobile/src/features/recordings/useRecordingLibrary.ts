@@ -463,7 +463,7 @@ export function useRecordingLibrary() {
           reviewRequest,
         );
         await saveRecordingUpdate(recording, { sessionInsightsReview: review });
-        setNotice('Reviewed insights saved.');
+        setNotice('Session summary reviewed.');
         return review;
       } catch (reviewError) {
         setError(messageFrom(reviewError, 'Reviewed session insights could not be saved.'));
