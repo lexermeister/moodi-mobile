@@ -41,7 +41,11 @@ export type RecordMoodActionSettings = {
   reference_period: string;
   start_date: string | null;
   end_date: string | null;
-  duration_days: 14;
+  duration_kind: 'fixed' | 'ongoing';
+  duration_days: number | null;
+  preferred_check_in_time: string | null;
+  preferred_time_zone: string | null;
+  schedule_origin: 'moodi_default' | 'user_selected';
   configuration: RecordMoodConfiguration;
 };
 
@@ -146,15 +150,31 @@ export function isRecordMoodCandidate(value: unknown): value is RecordMoodCandid
 }
 
 function isMoodActionSettings(value: unknown): value is RecordMoodActionSettings {
+  if (!isObject(value)) return false;
+  const durationIsValid =
+    (value.duration_kind === 'fixed' &&
+      typeof value.duration_days === 'number' &&
+      Number.isInteger(value.duration_days) &&
+      value.duration_days >= 1 &&
+      value.duration_days <= 365) ||
+    (value.duration_kind === 'ongoing' &&
+      value.duration_days === null &&
+      value.end_date === null);
+  const preferredTimeIsValid =
+    (value.preferred_check_in_time === null && value.preferred_time_zone === null) ||
+    (typeof value.preferred_check_in_time === 'string' &&
+      /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value.preferred_check_in_time) &&
+      typeof value.preferred_time_zone === 'string');
   return (
-    isObject(value) &&
     typeof value.exact_task === 'string' &&
     typeof value.frequency === 'string' &&
     isNullableString(value.timing) &&
     typeof value.reference_period === 'string' &&
     isNullableString(value.start_date) &&
     isNullableString(value.end_date) &&
-    value.duration_days === 14 &&
+    durationIsValid &&
+    preferredTimeIsValid &&
+    (value.schedule_origin === 'moodi_default' || value.schedule_origin === 'user_selected') &&
     isRecordMoodConfiguration(value.configuration)
   );
 }

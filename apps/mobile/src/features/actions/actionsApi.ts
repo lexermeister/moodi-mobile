@@ -58,8 +58,9 @@ async function requestJson(path: string, init?: RequestInit): Promise<unknown> {
   return body ? parseJson(body) : null;
 }
 
-export async function listMoodActions(recordingId: string): Promise<MoodAction[]> {
-  const payload = await requestJson(`/actions?recording_id=${encodeURIComponent(recordingId)}`);
+export async function listMoodActions(recordingId?: string): Promise<MoodAction[]> {
+  const query = recordingId ? `?recording_id=${encodeURIComponent(recordingId)}` : '';
+  const payload = await requestJson(`/actions${query}`);
   if (
     !payload ||
     typeof payload !== 'object' ||
@@ -69,6 +70,14 @@ export async function listMoodActions(recordingId: string): Promise<MoodAction[]
     throw new ActionsApiError('The Moodi backend returned invalid Actions.');
   }
   return (payload as { actions: MoodAction[] }).actions;
+}
+
+export async function getMoodAction(actionId: string): Promise<MoodAction> {
+  const payload = await requestJson(`/actions/${encodeURIComponent(actionId)}`);
+  if (!isMoodAction(payload)) {
+    throw new ActionsApiError('The Moodi backend returned an invalid Action.');
+  }
+  return payload;
 }
 
 export async function reviewMoodCandidate({

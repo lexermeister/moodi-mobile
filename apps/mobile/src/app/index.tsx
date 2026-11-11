@@ -1,5 +1,5 @@
-import { RecordingScreen } from '@/features/recordings/RecordingScreen';
+import { Redirect } from 'expo-router';
 
 export default function HomeScreen() {
-  return <RecordingScreen />;
+  return <Redirect href="/(tabs)/sessions" />;
 }

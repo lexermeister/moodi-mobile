@@ -156,7 +156,9 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
 
               <RecordMoodActionCard
                 candidate={insights.action_candidates[0]}
+                compactWhenActive
                 draftId={draftId}
+                key={`${recording.id}:${recording.sessionInsights?.source_version ?? insights.source_version}:${insights.action_candidates[0]?.id ?? 'none'}`}
                 recordingId={recording.backendRecordingId}
                 sourceVersion={recording.sessionInsights?.source_version ?? insights.source_version}
               />

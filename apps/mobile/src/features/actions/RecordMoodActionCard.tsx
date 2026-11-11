@@ -1,7 +1,10 @@
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -14,6 +17,7 @@ import {
   confirmMoodEntry,
   deleteMoodEntry,
   exportMoodEntries,
+  getMoodAction,
   getMoodCandidateReview,
   listMoodActions,
   listMoodEntries,
@@ -27,6 +31,7 @@ import type {
   RecordMoodActionSettings,
   RecordMoodCandidate,
 } from './actionTypes';
+import { formatActionDateRange, getActionProgress, getTodayEntry } from './actionStatus';
 import {
   createUuid,
   dayKeyAtCapturedOffset,
@@ -34,12 +39,19 @@ import {
   parseMoodScore,
 } from './moodDomain';
 import { shareMoodExport } from './shareMoodExport';
+import {
+  formatActionCadence,
+  formatActionDuration,
+  formatClockTime,
+} from './scheduleFormatting';
 
 type Props = {
   recordingId?: string;
+  actionId?: string;
   draftId?: string;
-  sourceVersion: string;
+  sourceVersion?: string;
   candidate?: RecordMoodCandidate;
+  compactWhenActive?: boolean;
 };
 
 function messageFrom(error: unknown, fallback: string) {
@@ -74,9 +86,45 @@ function settingsFromCandidate(
     reference_period: candidate.reference_period,
     start_date: startDate,
     end_date: endDate,
+    duration_kind: 'fixed',
     duration_days: candidate.duration_days,
+    preferred_check_in_time: null,
+    preferred_time_zone: null,
+    schedule_origin: 'moodi_default',
     configuration: candidate.configuration,
   };
+}
+
+type DurationChoice = '7' | '14' | '30' | 'custom' | 'ongoing';
+
+function durationChoiceFrom(settings: RecordMoodActionSettings): DurationChoice {
+  if (settings.duration_kind === 'ongoing') return 'ongoing';
+  if (settings.duration_days === 7) return '7';
+  if (settings.duration_days === 14) return '14';
+  if (settings.duration_days === 30) return '30';
+  return 'custom';
+}
+
+function timePickerValue(value: string | null) {
+  const date = new Date();
+  const [hours, minutes] = (value ?? '20:00').split(':').map(Number);
+  date.setHours(hours, minutes, 0, 0);
+  return date;
+}
+
+function timeString(value: Date) {
+  return `${value.getHours().toString().padStart(2, '0')}:${value
+    .getMinutes()
+    .toString()
+    .padStart(2, '0')}`;
+}
+
+function endDateFor(startDate: string, durationDays: number) {
+  return new Date(
+    Date.parse(`${startDate}T00:00:00.000Z`) + (durationDays - 1) * 24 * 60 * 60 * 1000,
+  )
+    .toISOString()
+    .slice(0, 10);
 }
 
 function formatEntryDate(entryTime: string) {
@@ -88,15 +136,18 @@ function formatEntryDate(entryTime: string) {
 
 export function RecordMoodActionCard({
   recordingId,
+  actionId,
   draftId,
   sourceVersion,
   candidate,
+  compactWhenActive = false,
 }: Props) {
+  const router = useRouter();
   const [action, setAction] = useState<MoodAction | null>(null);
   const [entries, setEntries] = useState<MoodEntry[]>([]);
   const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(() => new Set());
   const [rejected, setRejected] = useState(false);
-  const [loading, setLoading] = useState(Boolean(recordingId));
+  const [loading, setLoading] = useState(Boolean(recordingId || actionId));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -111,25 +162,65 @@ export function RecordMoodActionCard({
   const [moodValue, setMoodValue] = useState<number | null>(null);
   const [moodLabel, setMoodLabel] = useState('');
   const [context, setContext] = useState('');
+  const [reviewedSettings, setReviewedSettings] = useState<RecordMoodActionSettings | null>(() =>
+    candidate ? settingsFromCandidate(candidate) : null,
+  );
+  const [editingSchedule, setEditingSchedule] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [draftCheckInTime, setDraftCheckInTime] = useState(() => new Date());
+  const [draftDurationChoice, setDraftDurationChoice] =
+    useState<DurationChoice>('14');
+  const [draftCustomDays, setDraftCustomDays] = useState('14');
 
-  const refreshEntries = useCallback(async (activeAction: MoodAction) => {
-    const loaded = await listMoodEntries(activeAction.id);
-    setEntries(loaded);
-    const available = new Set(
-      loaded.filter((entry) => entry.status === 'confirmed').map((entry) => entry.id),
-    );
-    setSelectedEntryIds((current) =>
-      new Set([...current].filter((entryId) => available.has(entryId))),
-    );
+  const editEntry = useCallback((entry: MoodEntry, announce = true) => {
+    setEntryId(entry.id);
+    setEntryRevision(entry.revision);
+    setEditingConfirmed(entry.status === 'confirmed');
+    setReviewing(false);
+    setEntryTime(entry.values.entry_time);
+    setTimezoneOffsetMinutes(entry.values.timezone_offset_minutes);
+    setMoodValue(entry.values.mood_value);
+    setMoodLabel(entry.values.mood_label ?? '');
+    setContext(entry.values.context ?? '');
+    if (announce) {
+      setNotice(entry.status === 'draft' ? 'Draft resumed.' : 'Editing saved entry.');
+    }
+    setError(null);
   }, []);
 
+  const refreshEntries = useCallback(
+    async (activeAction: MoodAction, openTodayEntry = false) => {
+      const loaded = await listMoodEntries(activeAction.id);
+      setEntries(loaded);
+      const available = new Set(
+        loaded.filter((entry) => entry.status === 'confirmed').map((entry) => entry.id),
+      );
+      setSelectedEntryIds((current) =>
+        new Set([...current].filter((entryId) => available.has(entryId))),
+      );
+      if (openTodayEntry) {
+        const todayEntry = getTodayEntry(loaded);
+        if (todayEntry?.status === 'draft') editEntry(todayEntry, false);
+      }
+    },
+    [editEntry],
+  );
+
   useEffect(() => {
-    if (!recordingId) {
+    if (!recordingId && !actionId) {
       return;
     }
     let active = true;
     const load = async () => {
       try {
+        if (actionId) {
+          const loadedAction = await getMoodAction(actionId);
+          if (!active) return;
+          setAction(loadedAction);
+          await refreshEntries(loadedAction, true);
+          return;
+        }
+        if (!recordingId) return;
         const actions = await listMoodActions(recordingId);
         const review = candidate
           ? await getMoodCandidateReview(recordingId, candidate.id)
@@ -138,7 +229,7 @@ export function RecordMoodActionCard({
         const activeAction = review?.action ?? actions[0] ?? null;
         setAction(activeAction);
         setRejected(review?.disposition === 'rejected');
-        if (activeAction) await refreshEntries(activeAction);
+        if (activeAction && !compactWhenActive) await refreshEntries(activeAction, true);
       } catch (loadError) {
         if (active) setError(messageFrom(loadError, 'The Action could not be loaded.'));
       } finally {
@@ -149,7 +240,7 @@ export function RecordMoodActionCard({
     return () => {
       active = false;
     };
-  }, [candidate, recordingId, refreshEntries]);
+  }, [actionId, candidate, compactWhenActive, recordingId, refreshEntries]);
 
   const resetForm = useCallback(() => {
     const now = new Date();
@@ -191,9 +282,7 @@ export function RecordMoodActionCard({
   }, [action, context, entryTime, moodLabel, moodValue, timezoneOffsetMinutes]);
 
   const activate = useCallback(async () => {
-    if (!recordingId || !draftId || !candidate) return;
-    const settings = settingsFromCandidate(candidate);
-    if (!settings) return;
+    if (!recordingId || !draftId || !sourceVersion || !candidate || !reviewedSettings) return;
     setBusy(true);
     setError(null);
     try {
@@ -203,7 +292,7 @@ export function RecordMoodActionCard({
         draftId,
         sourceVersion,
         disposition: 'activate',
-        settings,
+        settings: reviewedSettings,
       });
       setAction(activated);
       setRejected(false);
@@ -213,10 +302,58 @@ export function RecordMoodActionCard({
     } finally {
       setBusy(false);
     }
-  }, [candidate, draftId, recordingId, sourceVersion]);
+  }, [candidate, draftId, recordingId, reviewedSettings, sourceVersion]);
+
+  const openScheduleEditor = useCallback(() => {
+    if (!reviewedSettings) return;
+    const choice = durationChoiceFrom(reviewedSettings);
+    setDraftCheckInTime(timePickerValue(reviewedSettings.preferred_check_in_time));
+    setDraftDurationChoice(choice);
+    setDraftCustomDays(`${reviewedSettings.duration_days ?? 14}`);
+    setShowTimePicker(false);
+    setEditingSchedule(true);
+    setError(null);
+    setNotice(null);
+  }, [reviewedSettings]);
+
+  const saveSchedule = useCallback(() => {
+    if (!reviewedSettings || !reviewedSettings.start_date) return;
+    const ongoing = draftDurationChoice === 'ongoing';
+    const durationDays = ongoing
+      ? null
+      : Number(draftDurationChoice === 'custom' ? draftCustomDays : draftDurationChoice);
+    if (
+      !ongoing &&
+      (durationDays === null ||
+        !Number.isInteger(durationDays) ||
+        durationDays < 1 ||
+        durationDays > 365)
+    ) {
+      setError('Choose a duration from 1 to 365 days.');
+      return;
+    }
+    const preferredTime = timeString(draftCheckInTime);
+    const preferredTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    setReviewedSettings({
+      ...reviewedSettings,
+      duration_kind: ongoing ? 'ongoing' : 'fixed',
+      duration_days: durationDays,
+      end_date:
+        ongoing || durationDays === null
+          ? null
+          : endDateFor(reviewedSettings.start_date, durationDays),
+      preferred_check_in_time: preferredTime,
+      preferred_time_zone: preferredTimeZone,
+      schedule_origin: 'user_selected',
+    });
+    setEditingSchedule(false);
+    setShowTimePicker(false);
+    setError(null);
+    setNotice('Schedule updated. Review it before activating.');
+  }, [draftCheckInTime, draftCustomDays, draftDurationChoice, reviewedSettings]);
 
   const reject = useCallback(async () => {
-    if (!recordingId || !draftId || !candidate) return;
+    if (!recordingId || !draftId || !sourceVersion || !candidate) return;
     setBusy(true);
     setError(null);
     try {
@@ -284,8 +421,8 @@ export function RecordMoodActionCard({
         });
         setNotice('Mood entry saved.');
       }
-      await refreshEntries(action);
       resetForm();
+      await refreshEntries(action, true);
     } catch (confirmError) {
       setError(messageFrom(confirmError, 'The entry could not be saved. Your input is still here.'));
     } finally {
@@ -303,20 +440,6 @@ export function RecordMoodActionCard({
     setReviewing(true);
   }, [values]);
 
-  const editEntry = useCallback((entry: MoodEntry) => {
-    setEntryId(entry.id);
-    setEntryRevision(entry.revision);
-    setEditingConfirmed(entry.status === 'confirmed');
-    setReviewing(false);
-    setEntryTime(entry.values.entry_time);
-    setTimezoneOffsetMinutes(entry.values.timezone_offset_minutes);
-    setMoodValue(entry.values.mood_value);
-    setMoodLabel(entry.values.mood_label ?? '');
-    setContext(entry.values.context ?? '');
-    setNotice(entry.status === 'draft' ? 'Draft resumed.' : 'Editing saved entry.');
-    setError(null);
-  }, []);
-
   const removeEntry = useCallback(
     (entry: MoodEntry) => {
       if (!action) return;
@@ -331,7 +454,9 @@ export function RecordMoodActionCard({
               try {
                 await deleteMoodEntry(action.id, entry.id);
                 await refreshEntries(action);
-                if (entry.id === entryId) resetForm();
+                if (entry.id === entryId) {
+                  resetForm();
+                }
                 setNotice('Mood entry deleted.');
               } catch (deleteError) {
                 setError(messageFrom(deleteError, 'The mood entry could not be deleted.'));
@@ -373,7 +498,13 @@ export function RecordMoodActionCard({
   if (loading) {
     return <ActivityIndicator color={colors.accentDark} />;
   }
-  if (!candidate && !action) return null;
+  if (!candidate && !action) {
+    return error ? (
+      <View style={styles.candidateCard}>
+        <Text style={styles.errorText}>{error}</Text>
+      </View>
+    ) : null;
+  }
 
   if (!action) {
     if (rejected) {
@@ -385,7 +516,9 @@ export function RecordMoodActionCard({
       );
     }
     if (!candidate) return null;
-    const canActivate = Boolean(settingsFromCandidate(candidate) && recordingId && draftId);
+    const canActivate = Boolean(
+      reviewedSettings && recordingId && draftId && sourceVersion && !editingSchedule,
+    );
     return (
       <View style={styles.candidateCard}>
         <View style={styles.titleRow}>
@@ -396,10 +529,7 @@ export function RecordMoodActionCard({
         </View>
         <Text style={styles.taskText}>{candidate.exact_task}</Text>
         <Text style={styles.metaText}>
-          {[candidate.frequency, candidate.timing, candidate.reference_period]
-            .filter(Boolean)
-            .concat(`${candidate.duration_days} days`)
-            .join(' · ') || 'Details not established'}
+          {[candidate.frequency, candidate.reference_period].filter(Boolean).join(' · ')}
         </Text>
         {candidate.configuration?.input_kind === 'numeric_0_10' &&
         candidate.configuration.scale ? (
@@ -412,10 +542,146 @@ export function RecordMoodActionCard({
             {candidate.configuration.scale_origin === 'moodi_default' ? (
               <Text style={styles.supportingText}>
                 Moodi default for Record mood: overall mood 0–10, once each evening for 14 days.
-                Activating confirms these defaults.
+                You can edit the check-in schedule before activating.
               </Text>
             ) : (
               <Text style={styles.supportingText}>Scale stated in the session.</Text>
+            )}
+          </View>
+        ) : null}
+        {reviewedSettings ? (
+          <View style={styles.scheduleReviewBox}>
+            <View style={styles.titleRow}>
+              <Text style={styles.scheduleTitle}>Schedule</Text>
+              {!editingSchedule ? (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={busy}
+                  onPress={openScheduleEditor}
+                  style={({ pressed }) => [styles.editScheduleButton, pressed && styles.pressed]}>
+                  <Text style={styles.secondaryButtonText}>Edit</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            {editingSchedule ? (
+              <View style={styles.scheduleEditor}>
+                <Text style={styles.fieldLabel}>Check-in time</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setShowTimePicker((visible) => !visible)}
+                  style={({ pressed }) => [styles.timeButton, pressed && styles.pressed]}>
+                  <Text style={styles.timeButtonText}>
+                    {formatClockTime(timeString(draftCheckInTime))}
+                  </Text>
+                </Pressable>
+                {showTimePicker ? (
+                  <DateTimePicker
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    mode="time"
+                    minuteInterval={5}
+                    onChange={(_event, selectedTime) => {
+                      if (Platform.OS === 'android') setShowTimePicker(false);
+                      if (selectedTime) setDraftCheckInTime(selectedTime);
+                    }}
+                    value={draftCheckInTime}
+                  />
+                ) : null}
+
+                <Text style={styles.fieldLabel}>Duration</Text>
+                <View style={styles.durationOptions}>
+                  {(['7', '14', '30'] as const).map((days) => (
+                    <Pressable
+                      key={days}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: draftDurationChoice === days }}
+                      onPress={() => setDraftDurationChoice(days)}
+                      style={({ pressed }) => [
+                        styles.durationOption,
+                        draftDurationChoice === days && styles.durationOptionSelected,
+                        pressed && styles.pressed,
+                      ]}>
+                      <Text
+                        style={[
+                          styles.durationOptionText,
+                          draftDurationChoice === days && styles.durationOptionTextSelected,
+                        ]}>
+                        {days} days
+                      </Text>
+                    </Pressable>
+                  ))}
+                  <Pressable
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: draftDurationChoice === 'custom' }}
+                    onPress={() => setDraftDurationChoice('custom')}
+                    style={({ pressed }) => [
+                      styles.durationOption,
+                      draftDurationChoice === 'custom' && styles.durationOptionSelected,
+                      pressed && styles.pressed,
+                    ]}>
+                    <Text
+                      style={[
+                        styles.durationOptionText,
+                        draftDurationChoice === 'custom' && styles.durationOptionTextSelected,
+                      ]}>
+                      Custom
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: draftDurationChoice === 'ongoing' }}
+                    onPress={() => setDraftDurationChoice('ongoing')}
+                    style={({ pressed }) => [
+                      styles.durationOption,
+                      draftDurationChoice === 'ongoing' && styles.durationOptionSelected,
+                      pressed && styles.pressed,
+                    ]}>
+                    <Text
+                      style={[
+                        styles.durationOptionText,
+                        draftDurationChoice === 'ongoing' && styles.durationOptionTextSelected,
+                      ]}>
+                      Ongoing
+                    </Text>
+                  </Pressable>
+                </View>
+                {draftDurationChoice === 'custom' ? (
+                  <TextInput
+                    accessibilityLabel="Custom duration in days"
+                    keyboardType="number-pad"
+                    maxLength={3}
+                    onChangeText={setDraftCustomDays}
+                    placeholder="Number of days"
+                    style={styles.input}
+                    value={draftCustomDays}
+                  />
+                ) : null}
+                {draftDurationChoice === 'ongoing' ? (
+                  <Text style={styles.supportingText}>No end date.</Text>
+                ) : null}
+                <View style={styles.buttonRow}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setEditingSchedule(false);
+                      setShowTimePicker(false);
+                      setError(null);
+                    }}
+                    style={({ pressed }) => [styles.textOnlyButton, pressed && styles.pressed]}>
+                    <Text style={styles.textOnlyButtonText}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={saveSchedule}
+                    style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}>
+                    <Text style={styles.primaryButtonText}>Save changes</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.taskText}>{formatActionCadence(reviewedSettings)}</Text>
+                <Text style={styles.metaText}>{formatActionDuration(reviewedSettings)}</Text>
+              </>
             )}
           </View>
         ) : null}
@@ -447,23 +713,85 @@ export function RecordMoodActionCard({
     );
   }
 
+  if (compactWhenActive) {
+    return (
+      <View style={styles.activatedCard}>
+        <View style={styles.titleRow}>
+          <Text style={styles.activatedMark}>✓</Text>
+          <Text style={styles.candidateTitle}>Record mood activated</Text>
+        </View>
+        <Text style={styles.metaText}>{formatActionCadence(action.settings)}</Text>
+        <Text style={styles.metaText}>{formatActionDuration(action.settings)}</Text>
+        {notice ? <Text style={styles.noticeText}>{notice}</Text> : null}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() =>
+            router.push({ pathname: '/actions/[actionId]', params: { actionId: action.id } })
+          }
+          style={({ pressed }) => [styles.openActionsButton, pressed && styles.pressed]}>
+          <Text style={styles.openActionsButtonText}>Open in Actions</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   const configuration = action.settings.configuration;
   const scale = configuration.scale;
+  const progress = getActionProgress(action);
+  const todayEntry = getTodayEntry(entries);
   return (
     <View style={styles.actionCard}>
       <View style={styles.titleRow}>
         <Text style={styles.candidateTitle}>Record mood</Text>
-        <Text style={styles.activeBadge}>ACTIVE</Text>
+        <Text style={[styles.activeBadge, progress.completed && styles.completedBadge]}>
+          {progress.completed ? 'COMPLETED' : 'ACTIVE'}
+        </Text>
       </View>
       <Text style={styles.taskText}>{action.settings.exact_task}</Text>
       <Text style={styles.metaText}>
-        {[action.settings.frequency, action.settings.timing, action.settings.reference_period]
-          .filter(Boolean)
-          .concat(`${action.settings.duration_days} days`)
-          .join(' · ')}
+        {formatActionCadence(action.settings)} · {action.settings.reference_period}
+      </Text>
+      <Text style={styles.progressText}>
+        {progress.completed
+          ? 'Completed'
+          : action.settings.duration_kind === 'ongoing'
+            ? `Day ${progress.dayNumber} · Ongoing`
+            : `Day ${progress.dayNumber} of ${action.settings.duration_days}`}{' '}
+        · {formatActionDateRange(action)}
       </Text>
 
-      <View style={styles.composer}>
+      {progress.completed && entryRevision === null ? (
+        <View style={styles.completedMessage}>
+          <Text style={styles.composerTitle}>
+            {action.settings.duration_kind === 'ongoing'
+              ? 'This Action has ended'
+              : `This ${action.settings.duration_days}-day Action is complete`}
+          </Text>
+          <Text style={styles.supportingText}>
+            You can review, correct, delete, or export the entries below.
+          </Text>
+        </View>
+      ) : todayEntry?.status === 'confirmed' && entryRevision === null ? (
+        <View style={styles.completedMessage}>
+          <Text style={styles.composerTitle}>Today recorded</Text>
+          <Text style={styles.reviewValue}>
+            {todayEntry.values.mood_value !== null
+              ? `Overall mood: ${todayEntry.values.mood_value}/10`
+              : `Mood: ${todayEntry.values.mood_label ?? 'Not supplied'}`}
+          </Text>
+          {todayEntry.values.context ? (
+            <Text style={styles.reviewContext}>{todayEntry.values.context}</Text>
+          ) : null}
+          <Text style={styles.dateText}>{formatEntryDate(todayEntry.values.entry_time)}</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => editEntry(todayEntry)}
+            style={({ pressed }) => [styles.editTodayButton, pressed && styles.pressed]}>
+            <Text style={styles.secondaryButtonText}>Edit today’s entry</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <View style={styles.composer}>
         <Text style={styles.composerTitle}>
           {editingConfirmed ? 'Correct mood entry' : entryRevision ? 'Resume draft' : 'Today'}
         </Text>
@@ -589,7 +917,8 @@ export function RecordMoodActionCard({
             </Pressable>
           </View>
         )}
-      </View>
+        </View>
+      )}
 
       {entries.length ? (
         <View style={styles.history}>
@@ -667,18 +996,36 @@ const colors = {
 const styles = StyleSheet.create({
   candidateCard: { backgroundColor: '#fff8e8', borderRadius: 14, gap: 10, padding: 14 },
   actionCard: { backgroundColor: '#eef6ef', borderRadius: 14, gap: 12, padding: 14 },
+  activatedCard: { backgroundColor: '#eef6ef', borderRadius: 14, gap: 8, padding: 14 },
+  activatedMark: { color: '#23613a', fontSize: 18, fontWeight: '900' },
   titleRow: { alignItems: 'center', flexDirection: 'row', gap: 8 },
   candidateTitle: { color: colors.ink, flex: 1, fontSize: 16, fontWeight: '800' },
   candidateBadge: { backgroundColor: '#f5dfb4', borderRadius: 7, color: '#725d36', fontSize: 10, fontWeight: '800', overflow: 'hidden', paddingHorizontal: 7, paddingVertical: 3 },
   activeBadge: { backgroundColor: '#d4ead9', borderRadius: 7, color: '#23613a', fontSize: 10, fontWeight: '800', overflow: 'hidden', paddingHorizontal: 7, paddingVertical: 3 },
+  completedBadge: { backgroundColor: '#e8e2d8', color: colors.muted },
   taskText: { color: colors.ink, fontSize: 15, fontWeight: '700', lineHeight: 21 },
   metaText: { color: colors.muted, fontSize: 12, lineHeight: 17 },
+  progressText: { color: colors.ink, fontSize: 12, fontWeight: '700', lineHeight: 17 },
   sourceBox: { borderLeftColor: '#d2b16c', borderLeftWidth: 3, gap: 3, paddingLeft: 10 },
   scaleReviewBox: { backgroundColor: '#fffdf8', borderRadius: 10, gap: 4, padding: 10 },
+  scheduleReviewBox: { backgroundColor: '#fffdf8', borderRadius: 10, gap: 7, padding: 11 },
+  scheduleTitle: { color: colors.ink, flex: 1, fontSize: 14, fontWeight: '800' },
+  editScheduleButton: { paddingHorizontal: 6, paddingVertical: 4 },
+  scheduleEditor: { gap: 9 },
+  fieldLabel: { color: colors.ink, fontSize: 12, fontWeight: '800' },
+  timeButton: { alignSelf: 'flex-start', borderColor: colors.line, borderRadius: 10, borderWidth: 1, paddingHorizontal: 13, paddingVertical: 9 },
+  timeButtonText: { color: colors.ink, fontSize: 15, fontWeight: '800' },
+  durationOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  durationOption: { backgroundColor: '#efe9df', borderRadius: 9, paddingHorizontal: 10, paddingVertical: 8 },
+  durationOptionSelected: { backgroundColor: colors.accentDark },
+  durationOptionText: { color: colors.ink, fontSize: 12, fontWeight: '800' },
+  durationOptionTextSelected: { color: '#fff' },
   sourceLabel: { color: '#725d36', fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
   sourceText: { color: '#5e5038', fontSize: 13, fontStyle: 'italic', lineHeight: 18 },
   supportingText: { color: colors.muted, fontSize: 12, lineHeight: 17 },
   composer: { backgroundColor: '#fffdf8', borderColor: colors.line, borderRadius: 13, borderWidth: 1, gap: 10, padding: 12 },
+  completedMessage: { backgroundColor: '#fffdf8', borderRadius: 13, gap: 4, padding: 12 },
+  editTodayButton: { alignSelf: 'flex-start', paddingVertical: 6 },
   composerTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
   dateText: { color: colors.muted, fontSize: 12 },
   scaleLabels: { flexDirection: 'row', justifyContent: 'space-between' },
@@ -699,6 +1046,8 @@ const styles = StyleSheet.create({
   primaryButtonText: { color: '#fff', fontSize: 13, fontWeight: '800' },
   secondaryButton: { borderColor: colors.accentDark, borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 9 },
   secondaryButtonText: { color: colors.accentDark, fontSize: 13, fontWeight: '800' },
+  openActionsButton: { alignSelf: 'flex-start', paddingVertical: 4 },
+  openActionsButtonText: { color: colors.accentDark, fontSize: 13, fontWeight: '800' },
   textOnlyButton: { paddingHorizontal: 7, paddingVertical: 8 },
   textOnlyButtonText: { color: colors.muted, fontSize: 13, fontWeight: '700' },
   noticeText: { color: '#23613a', fontSize: 12, fontWeight: '700' },
