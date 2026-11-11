@@ -2,33 +2,30 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { RecordMoodActionCard } from '@/features/actions/RecordMoodActionCard';
+import { MoodHistoryScreen } from '@/features/actions/MoodHistoryScreen';
 
-export default function ActionDetailScreen() {
+export default function ActionHistoryRoute() {
   const router = useRouter();
   const { actionId } = useLocalSearchParams<{ actionId: string }>();
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        contentInsetAdjustmentBehavior="automatic"
-        keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic">
         <View style={styles.header}>
           <Pressable
-            accessibilityLabel="Back to Actions"
+            accessibilityLabel="Back to mood check-in"
             accessibilityRole="button"
             onPress={() => router.back()}
             style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
-            <Text style={styles.backText}>‹ Actions</Text>
+            <Text style={styles.backText}>‹ Mood check-in</Text>
           </Pressable>
-          <Text style={styles.title}>Record mood</Text>
-          <Text style={styles.subtitle}>Your daily check-in and mood history.</Text>
+          <Text style={styles.title}>Mood history</Text>
+          <Text style={styles.subtitle}>A factual record of the entries you saved.</Text>
         </View>
         {typeof actionId === 'string' ? (
-          <RecordMoodActionCard actionId={actionId} />
+          <MoodHistoryScreen actionId={actionId} />
         ) : (
-          <Text style={styles.errorText}>This Action could not be opened.</Text>
+          <Text style={styles.errorText}>Mood history could not be opened.</Text>
         )}
       </ScrollView>
     </SafeAreaView>

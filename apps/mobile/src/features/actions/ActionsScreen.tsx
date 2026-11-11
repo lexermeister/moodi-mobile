@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { listMoodActions, listMoodEntries } from './actionsApi';
 import {
-  formatActionDateRange,
+  formatActionDate,
   getActionProgress,
   getTodayEntry,
 } from './actionStatus';
@@ -31,50 +31,37 @@ function messageFrom(error: unknown) {
     : 'Actions could not be loaded.';
 }
 
-function ActionCard({ overview }: { overview: ActionOverview }) {
+function entryValue(entry: MoodEntry) {
+  return entry.values.mood_value !== null
+    ? `${entry.values.mood_value}/10`
+    : entry.values.mood_label ?? 'Saved';
+}
+
+function TodayActionCard({ overview }: { overview: ActionOverview }) {
   const router = useRouter();
   const progress = getActionProgress(overview.action);
   const todayEntry = getTodayEntry(overview.entries);
-  const callToAction = progress.completed
-    ? 'View history'
-    : todayEntry?.status === 'confirmed'
-      ? 'View today’s entry'
-      : todayEntry?.status === 'draft'
-        ? 'Resume draft'
-        : 'Record mood';
-  const todayStatus = progress.completed
-    ? `${overview.entries.filter((entry) => entry.status === 'confirmed').length} recorded`
-    : todayEntry?.status === 'confirmed'
-      ? 'Today recorded'
-      : todayEntry?.status === 'draft'
-        ? 'Draft saved for today'
-        : 'Today not recorded yet';
+  const callToAction = todayEntry?.status === 'confirmed'
+    ? 'View or edit'
+    : todayEntry?.status === 'draft'
+      ? 'Resume'
+      : 'Check in';
+  const todayStatus = todayEntry?.status === 'confirmed'
+    ? `Mood recorded · ${entryValue(todayEntry)}`
+    : todayEntry?.status === 'draft'
+      ? 'Draft saved'
+      : 'Ready when you are';
 
   return (
     <View style={styles.card}>
-      <View style={styles.cardTitleRow}>
-        <Text style={styles.cardTitle}>Record mood</Text>
-        <Text style={[styles.badge, progress.completed && styles.completedBadge]}>
-          {progress.completed ? 'COMPLETED' : 'ACTIVE'}
-        </Text>
-      </View>
-      <Text style={styles.task}>{overview.action.settings.exact_task}</Text>
-      <Text style={styles.schedule}>
-        {formatActionCadence(overview.action.settings)}
+      <Text style={styles.cardTitle}>Mood check-in</Text>
+      <Text style={styles.schedule}>{formatActionCadence(overview.action.settings)}</Text>
+      <Text style={styles.todayStatus}>{todayStatus}</Text>
+      <Text style={styles.progressText}>
+        {overview.action.settings.duration_kind === 'ongoing'
+          ? `Day ${progress.dayNumber}`
+          : `Day ${progress.dayNumber} of ${overview.action.settings.duration_days}`}
       </Text>
-      <Text style={styles.dateRange}>{formatActionDateRange(overview.action)}</Text>
-      <View style={styles.progressRow}>
-        <Text style={styles.progressText}>
-          {progress.completed
-            ? overview.action.settings.duration_kind === 'ongoing'
-              ? 'Action ended'
-              : `${overview.action.settings.duration_days}-day action complete`
-            : overview.action.settings.duration_kind === 'ongoing'
-              ? `Day ${progress.dayNumber} · Ongoing`
-              : `Day ${progress.dayNumber} of ${overview.action.settings.duration_days}`}
-        </Text>
-        <Text style={styles.todayStatus}>{todayStatus}</Text>
-      </View>
       <Pressable
         accessibilityRole="button"
         onPress={() =>
@@ -85,6 +72,35 @@ function ActionCard({ overview }: { overview: ActionOverview }) {
         }
         style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}>
         <Text style={styles.primaryButtonText}>{callToAction}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function PastActionCard({ overview }: { overview: ActionOverview }) {
+  const router = useRouter();
+  const progress = getActionProgress(overview.action);
+  const confirmedCount = overview.entries.filter((entry) => entry.status === 'confirmed').length;
+
+  return (
+    <View style={styles.pastCard}>
+      <View style={styles.pastCopy}>
+        <Text style={styles.pastTitle}>Track your mood</Text>
+        <Text style={styles.pastMeta}>
+          {confirmedCount} {confirmedCount === 1 ? 'entry' : 'entries'}
+          {progress.endDate ? ` · Ended ${formatActionDate(progress.endDate)}` : ' · Ended'}
+        </Text>
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() =>
+          router.push({
+            pathname: '/actions/[actionId]/history',
+            params: { actionId: overview.action.id },
+          })
+        }
+        style={({ pressed }) => [styles.historyButton, pressed && styles.pressed]}>
+        <Text style={styles.historyButtonText}>View history</Text>
       </Pressable>
     </View>
   );
@@ -139,10 +155,10 @@ export function ActionsScreen() {
           />
         }>
         <View style={styles.header}>
-          <Text style={styles.eyebrow}>MOODI</Text>
-          <Text style={styles.title}>Actions</Text>
+          <Text style={styles.eyebrow}>ACTIONS</Text>
+          <Text style={styles.title}>Today</Text>
           <Text style={styles.subtitle}>
-            Tasks agreed in your sessions, ready when it is time to do them.
+            Things you agreed to, ready when you are.
           </Text>
         </View>
 
@@ -174,19 +190,24 @@ export function ActionsScreen() {
           </View>
         ) : (
           <>
-            {active.length ? (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Active</Text>
-                {active.map((overview) => (
-                  <ActionCard key={overview.action.id} overview={overview} />
-                ))}
-              </View>
-            ) : null}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>For today</Text>
+              {active.length ? (
+                active.map((overview) => (
+                  <TodayActionCard key={overview.action.id} overview={overview} />
+                ))
+              ) : (
+                <View style={styles.todayEmptyCard}>
+                  <Text style={styles.todayEmptyTitle}>Nothing waiting today</Text>
+                  <Text style={styles.todayEmptyText}>Your past Actions are available below.</Text>
+                </View>
+              )}
+            </View>
             {completed.length ? (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Completed</Text>
+                <Text style={styles.sectionTitle}>Past</Text>
                 {completed.map((overview) => (
-                  <ActionCard key={overview.action.id} overview={overview} />
+                  <PastActionCard key={overview.action.id} overview={overview} />
                 ))}
               </View>
             ) : null}
@@ -223,31 +244,10 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 16,
   },
-  cardTitleRow: { alignItems: 'center', flexDirection: 'row', gap: 8 },
-  cardTitle: { color: colors.ink, flex: 1, fontSize: 17, fontWeight: '900' },
-  badge: {
-    backgroundColor: '#dcefe1',
-    borderRadius: 7,
-    color: '#23613a',
-    fontSize: 10,
-    fontWeight: '900',
-    overflow: 'hidden',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  completedBadge: { backgroundColor: '#e8e2d8', color: colors.muted },
-  task: { color: colors.ink, fontSize: 14, fontWeight: '700', lineHeight: 20 },
+  cardTitle: { color: colors.ink, fontSize: 18, fontWeight: '900' },
   schedule: { color: colors.muted, fontSize: 13 },
-  dateRange: { color: colors.muted, fontSize: 12 },
-  progressRow: {
-    borderTopColor: colors.line,
-    borderTopWidth: 1,
-    gap: 4,
-    marginTop: 3,
-    paddingTop: 10,
-  },
-  progressText: { color: colors.ink, fontSize: 13, fontWeight: '800' },
-  todayStatus: { color: colors.muted, fontSize: 12 },
+  progressText: { color: colors.muted, fontSize: 12 },
+  todayStatus: { color: colors.ink, fontSize: 14, fontWeight: '800' },
   primaryButton: {
     alignItems: 'center',
     backgroundColor: colors.accentDark,
@@ -257,6 +257,24 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   primaryButtonText: { color: '#fff', fontSize: 14, fontWeight: '900' },
+  pastCard: {
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderColor: colors.line,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    padding: 14,
+  },
+  pastCopy: { flex: 1, gap: 3 },
+  pastTitle: { color: colors.ink, fontSize: 15, fontWeight: '900' },
+  pastMeta: { color: colors.muted, fontSize: 12 },
+  historyButton: { paddingHorizontal: 6, paddingVertical: 8 },
+  historyButtonText: { color: colors.accentDark, fontSize: 12, fontWeight: '800' },
+  todayEmptyCard: { backgroundColor: '#fff', borderRadius: 14, gap: 4, padding: 15 },
+  todayEmptyTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
+  todayEmptyText: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   emptyCard: { backgroundColor: '#fff8e8', borderRadius: 16, gap: 10, padding: 18 },
   emptyTitle: { color: colors.ink, fontSize: 18, fontWeight: '900' },
   emptyBody: { color: colors.muted, fontSize: 14, lineHeight: 21 },
