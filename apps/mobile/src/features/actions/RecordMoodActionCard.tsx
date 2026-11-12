@@ -18,8 +18,7 @@ import {
   deleteMoodEntry,
   exportMoodEntries,
   getMoodAction,
-  getMoodCandidateReview,
-  listMoodActions,
+  getMoodCandidateResolution,
   listMoodEntries,
   reviewMoodCandidate,
   saveMoodEntryDraft,
@@ -59,6 +58,9 @@ export type RecordMoodSessionState =
   | 'loading'
   | 'needs_setup'
   | 'active'
+  | 'already_active'
+  | 'linked_existing'
+  | 'conflict'
   | 'not_added'
   | 'error';
 
@@ -153,6 +155,10 @@ export function RecordMoodActionCard({
 }: Props) {
   const router = useRouter();
   const [action, setAction] = useState<MoodAction | null>(null);
+  const [existingAction, setExistingAction] = useState<MoodAction | null>(null);
+  const [resolutionStatus, setResolutionStatus] = useState<
+    'needs_setup' | 'activated' | 'linked_existing' | 'already_active' | 'rejected' | 'conflict'
+  >('needs_setup');
   const [entries, setEntries] = useState<MoodEntry[]>([]);
   const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(() => new Set());
   const [rejected, setRejected] = useState(false);
@@ -231,31 +237,36 @@ export function RecordMoodActionCard({
           return;
         }
         if (!recordingId) return;
-        const actions = await listMoodActions(recordingId);
-        const review = candidate
-          ? await getMoodCandidateReview(recordingId, candidate.id)
+        const resolution = candidate
+          ? await getMoodCandidateResolution(recordingId, candidate.id)
           : null;
         if (!active) return;
-        const matchingAction = candidate
-          ? actions.find(
-              (item) =>
-                item.candidate_id === candidate.id && item.transcript_version === sourceVersion,
-            ) ?? null
-          : null;
-        const reviewedAction =
-          review?.action &&
-          review.action.candidate_id === candidate?.id &&
-          review.action.transcript_version === sourceVersion
-            ? review.action
+        const activeAction =
+          resolution?.status === 'activated' || resolution?.status === 'linked_existing'
+            ? resolution.action
             : null;
-        const activeAction = review?.disposition === 'rejected'
-          ? null
-          : reviewedAction ?? matchingAction;
+        const availableAction =
+          resolution?.status === 'already_active' || resolution?.status === 'conflict'
+            ? resolution.action
+            : null;
         setAction(activeAction);
-        const wasRejected = review?.disposition === 'rejected';
+        setExistingAction(availableAction);
+        const nextStatus = resolution?.status ?? 'needs_setup';
+        setResolutionStatus(nextStatus);
+        const wasRejected = nextStatus === 'rejected';
         setRejected(wasRejected);
         onSessionStateChange?.(
-          activeAction ? 'active' : wasRejected ? 'not_added' : 'needs_setup',
+          nextStatus === 'activated'
+            ? 'active'
+            : nextStatus === 'linked_existing'
+              ? 'linked_existing'
+              : nextStatus === 'already_active'
+                ? 'already_active'
+                : nextStatus === 'conflict'
+                  ? 'conflict'
+                  : wasRejected
+                    ? 'not_added'
+                    : 'needs_setup',
         );
         if (activeAction && !compactWhenActive) await refreshEntries(activeAction, true);
       } catch (loadError) {
@@ -325,7 +336,7 @@ export function RecordMoodActionCard({
     setBusy(true);
     setError(null);
     try {
-      const activated = await reviewMoodCandidate({
+      const review = await reviewMoodCandidate({
         recordingId,
         candidateId: candidate.id,
         draftId,
@@ -333,10 +344,18 @@ export function RecordMoodActionCard({
         disposition: 'activate',
         settings: reviewedSettings,
       });
-      setAction(activated);
+      if (!review.action) throw new Error('The activated Action was not returned.');
+      const linkedExisting = review.disposition === 'linked_existing';
+      setAction(review.action);
+      setExistingAction(null);
+      setResolutionStatus(linkedExisting ? 'linked_existing' : 'activated');
       setRejected(false);
-      setNotice('Record mood Action activated.');
-      onSessionStateChange?.('active');
+      setNotice(
+        linkedExisting
+          ? 'This session now uses your existing mood Action.'
+          : 'Record mood Action activated.',
+      );
+      onSessionStateChange?.(linkedExisting ? 'linked_existing' : 'active');
     } catch (activationError) {
       setError(messageFrom(activationError, 'The Action could not be activated.'));
     } finally {
@@ -406,6 +425,8 @@ export function RecordMoodActionCard({
         settings: null,
       });
       setRejected(true);
+      setExistingAction(null);
+      setResolutionStatus('rejected');
       setNotice('Candidate dismissed. No Action was created.');
       onSessionStateChange?.('not_added');
     } catch (reviewError) {
@@ -545,6 +566,69 @@ export function RecordMoodActionCard({
         <Text style={styles.errorText}>{error}</Text>
       </View>
     ) : null;
+  }
+
+  if (!action && candidate && existingAction) {
+    const hasConflict = resolutionStatus === 'conflict';
+    const canLink = Boolean(
+      !hasConflict && reviewedSettings && recordingId && draftId && sourceVersion,
+    );
+    return (
+      <View style={styles.candidateCard}>
+        <View style={styles.titleRow}>
+          <Text style={styles.candidateTitle}>Track your mood daily</Text>
+          <Text style={[styles.candidateBadge, hasConflict && styles.conflictBadge]}>
+            {hasConflict ? 'NEEDS ATTENTION' : 'ALREADY ACTIVE'}
+          </Text>
+        </View>
+        <Text style={styles.taskText}>{candidate.exact_task}</Text>
+        <Text style={styles.supportingText}>
+          {hasConflict
+            ? 'An ongoing mood Action already exists with different tracking settings. Moodi will not create another one or change the existing Action.'
+            : 'An ongoing mood Action from an earlier session already covers this task. You can link this session without creating another Action.'}
+        </Text>
+        <View style={styles.scheduleReviewBox}>
+          <Text style={styles.scheduleTitle}>Existing Action</Text>
+          <Text style={styles.taskText}>{formatActionCadence(existingAction.settings)}</Text>
+          <Text style={styles.metaText}>{formatActionDuration(existingAction.settings)}</Text>
+        </View>
+        <View style={styles.sourceBox}>
+          <Text style={styles.sourceLabel}>From this session</Text>
+          <Text style={styles.sourceText}>“{candidate.source_excerpt}”</Text>
+        </View>
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        <View style={styles.buttonRow}>
+          <Pressable
+            accessibilityRole="button"
+            disabled={busy}
+            onPress={() => void reject()}
+            style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
+            <Text style={styles.secondaryButtonText}>Not an action</Text>
+          </Pressable>
+          {canLink ? (
+            <Pressable
+              accessibilityRole="button"
+              disabled={busy}
+              onPress={() => void activate()}
+              style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}>
+              <Text style={styles.primaryButtonText}>Use existing Action</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() =>
+                router.push({
+                  pathname: '/actions/[actionId]',
+                  params: { actionId: existingAction.id },
+                })
+              }
+              style={({ pressed }) => [styles.openActionsButton, pressed && styles.pressed]}>
+              <Text style={styles.openActionsButtonText}>Open existing Action</Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+    );
   }
 
   if (!action) {
@@ -761,7 +845,11 @@ export function RecordMoodActionCard({
       <View style={styles.activatedCard}>
         <View style={styles.titleRow}>
           <Text style={styles.activatedMark}>✓</Text>
-          <Text style={styles.candidateTitle}>Record mood activated</Text>
+          <Text style={styles.candidateTitle}>
+            {resolutionStatus === 'linked_existing'
+              ? 'Using existing mood Action'
+              : 'Record mood activated'}
+          </Text>
         </View>
         <Text style={styles.metaText}>{formatActionCadence(action.settings)}</Text>
         <Text style={styles.metaText}>{formatActionDuration(action.settings)}</Text>
@@ -1044,6 +1132,7 @@ const styles = StyleSheet.create({
   titleRow: { alignItems: 'center', flexDirection: 'row', gap: 8 },
   candidateTitle: { color: colors.ink, flex: 1, fontSize: 16, fontWeight: '800' },
   candidateBadge: { backgroundColor: '#f5dfb4', borderRadius: 7, color: '#725d36', fontSize: 10, fontWeight: '800', overflow: 'hidden', paddingHorizontal: 7, paddingVertical: 3 },
+  conflictBadge: { backgroundColor: '#fde2dd', color: '#9b2f20' },
   activeBadge: { backgroundColor: '#d4ead9', borderRadius: 7, color: '#23613a', fontSize: 10, fontWeight: '800', overflow: 'hidden', paddingHorizontal: 7, paddingVertical: 3 },
   completedBadge: { backgroundColor: '#e8e2d8', color: colors.muted },
   taskText: { color: colors.ink, fontSize: 15, fontWeight: '700', lineHeight: 21 },

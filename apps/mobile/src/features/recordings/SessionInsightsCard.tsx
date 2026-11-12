@@ -107,11 +107,14 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
                   await onSaveReview(recording, request);
                   setEditing(false);
                   setSummaryNotice(
-                    actionCandidate && actionStatus === 'needs_setup'
+                    actionCandidate &&
+                      (actionStatus === 'needs_setup' || actionStatus === 'already_active')
                       ? {
                           draftId: reviewableInsights.draft_id,
                           message:
-                            'Session summary reviewed. One agreed action still needs your review.',
+                            actionStatus === 'already_active'
+                              ? 'Session summary reviewed. One agreed action can use your existing mood check-in.'
+                              : 'Session summary reviewed. One agreed action still needs your review.',
                         }
                       : null,
                   );

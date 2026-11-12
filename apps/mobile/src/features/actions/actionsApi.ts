@@ -1,7 +1,10 @@
 import {
   isMoodAction,
+  isMoodCandidateResolution,
   isMoodEntry,
   type MoodAction,
+  type MoodCandidateResolution,
+  type MoodCandidateReviewResult,
   type MoodEntry,
   type MoodEntryValues,
   type RecordMoodActionSettings,
@@ -103,7 +106,7 @@ export async function reviewMoodCandidate({
   sourceVersion: string;
   disposition: 'activate' | 'reject';
   settings: RecordMoodActionSettings | null;
-}): Promise<MoodAction | null> {
+}): Promise<MoodCandidateReviewResult> {
   const payload = await requestJson(
     `/recordings/${recordingId}/action-candidates/${candidateId}/review`,
     {
@@ -120,17 +123,39 @@ export async function reviewMoodCandidate({
   if (!payload || typeof payload !== 'object') {
     throw new ActionsApiError('The Moodi backend returned an invalid Action review.');
   }
+  const responseDisposition = (payload as { disposition?: unknown }).disposition;
   const action = (payload as { action?: unknown }).action;
-  if (action !== null && !isMoodAction(action)) {
+  if (
+    (responseDisposition !== 'activated' &&
+      responseDisposition !== 'linked_existing' &&
+      responseDisposition !== 'rejected') ||
+    (action !== null && !isMoodAction(action))
+  ) {
     throw new ActionsApiError('The Moodi backend returned an invalid Action.');
   }
-  return action as MoodAction | null;
+  return {
+    disposition: responseDisposition,
+    action: action as MoodAction | null,
+  };
+}
+
+export async function getMoodCandidateResolution(
+  recordingId: string,
+  candidateId: string,
+): Promise<MoodCandidateResolution> {
+  const payload = await requestJson(
+    `/recordings/${encodeURIComponent(recordingId)}/action-candidates/${encodeURIComponent(candidateId)}/resolution`,
+  );
+  if (!isMoodCandidateResolution(payload)) {
+    throw new ActionsApiError('The Moodi backend returned an invalid Action resolution.');
+  }
+  return payload;
 }
 
 export async function getMoodCandidateReview(
   recordingId: string,
   candidateId: string,
-): Promise<{ disposition: 'activated' | 'rejected'; action: MoodAction | null } | null> {
+): Promise<MoodCandidateReviewResult | null> {
   let payload: unknown;
   try {
     payload = await requestJson(
@@ -146,12 +171,17 @@ export async function getMoodCandidateReview(
   const disposition = (payload as { disposition?: unknown }).disposition;
   const action = (payload as { action?: unknown }).action;
   if (
-    (disposition !== 'activated' && disposition !== 'rejected') ||
+    (disposition !== 'activated' &&
+      disposition !== 'linked_existing' &&
+      disposition !== 'rejected') ||
     (action !== null && !isMoodAction(action))
   ) {
     throw new ActionsApiError('The Moodi backend returned an invalid Action review.');
   }
-  return { disposition, action: action as MoodAction | null };
+  return {
+    disposition: disposition as MoodCandidateReviewResult['disposition'],
+    action: action as MoodAction | null,
+  };
 }
 
 export async function listMoodEntries(actionId: string): Promise<MoodEntry[]> {

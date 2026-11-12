@@ -63,6 +63,31 @@ export type MoodAction = {
   revision: number;
 };
 
+export type MoodCandidateReviewDisposition = 'activated' | 'linked_existing' | 'rejected';
+
+export type MoodCandidateReviewResult = {
+  disposition: MoodCandidateReviewDisposition;
+  action: MoodAction | null;
+};
+
+export type MoodCandidateResolutionStatus =
+  | 'needs_setup'
+  | 'already_active'
+  | 'activated'
+  | 'linked_existing'
+  | 'rejected'
+  | 'conflict';
+
+export type MoodCandidateResolution = {
+  recording_id: string;
+  candidate_id: string;
+  draft_id: string;
+  source_version: string;
+  status: MoodCandidateResolutionStatus;
+  action: MoodAction | null;
+  reason: 'incompatible_ongoing_action' | null;
+};
+
 export type MoodEntryValues = {
   relevant_date: string;
   entry_time: string;
@@ -193,6 +218,34 @@ export function isMoodAction(value: unknown): value is MoodAction {
     isMoodActionSettings(value.settings) &&
     typeof value.created_at === 'string' &&
     typeof value.revision === 'number'
+  );
+}
+
+export function isMoodCandidateResolution(value: unknown): value is MoodCandidateResolution {
+  if (!isObject(value)) return false;
+  const status = value.status;
+  const action = value.action;
+  const actionRequired = [
+    'already_active',
+    'activated',
+    'linked_existing',
+    'conflict',
+  ].includes(status as string);
+  return (
+    typeof value.recording_id === 'string' &&
+    typeof value.candidate_id === 'string' &&
+    typeof value.draft_id === 'string' &&
+    typeof value.source_version === 'string' &&
+    [
+      'needs_setup',
+      'already_active',
+      'activated',
+      'linked_existing',
+      'rejected',
+      'conflict',
+    ].includes(status as string) &&
+    (actionRequired ? isMoodAction(action) : action === null) &&
+    (value.reason === null || value.reason === 'incompatible_ongoing_action')
   );
 }
 

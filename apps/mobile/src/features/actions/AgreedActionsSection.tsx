@@ -17,7 +17,10 @@ type Props = {
 
 const statusLabels: Record<RecordMoodSessionState, string> = {
   active: 'ACTIVE',
+  already_active: 'ALREADY ACTIVE',
+  conflict: 'NEEDS ATTENTION',
   error: 'NEEDS ATTENTION',
+  linked_existing: 'ALREADY ACTIVE',
   loading: 'CHECKING',
   needs_setup: 'NEEDS SETUP',
   not_added: 'NOT ADDED',
@@ -45,7 +48,9 @@ export function AgreedActionsSection({
       <View style={styles.titleRow}>
         <View style={styles.titleCopy}>
           <Text style={styles.eyebrow}>
-            {status === 'needs_setup' ? 'NEXT STEP' : 'AGREED TASK'}
+            {status === 'needs_setup' || status === 'already_active'
+              ? 'NEXT STEP'
+              : 'AGREED TASK'}
           </Text>
           <Text style={styles.title}>Agreed actions</Text>
         </View>
@@ -53,9 +58,12 @@ export function AgreedActionsSection({
           accessibilityLiveRegion="polite"
           style={[
             styles.statusBadge,
-            status === 'active' && styles.activeBadge,
+            (status === 'active' ||
+              status === 'already_active' ||
+              status === 'linked_existing') &&
+              styles.activeBadge,
             status === 'not_added' && styles.inactiveBadge,
-            status === 'error' && styles.errorBadge,
+            (status === 'error' || status === 'conflict') && styles.errorBadge,
           ]}>
           {statusLabels[status]}
         </Text>
