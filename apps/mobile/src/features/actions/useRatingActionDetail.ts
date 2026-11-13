@@ -2,22 +2,22 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 
 import {
-  amendMoodEntry,
-  confirmMoodEntry,
-  deleteMoodAction,
-  deleteMoodEntry,
-  exportMoodEntries,
-  getMoodAction,
-  listMoodEntries,
-  saveMoodEntryDraft,
+  amendRatingEntry,
+  confirmRatingEntry,
+  deleteRatingAction,
+  deleteRatingEntry,
+  exportRatingEntries,
+  getRatingAction,
+  listRatingEntries,
+  saveRatingEntryDraft,
 } from './actionsApi';
-import type { MoodAction, MoodEntry, MoodEntryValues } from './actionTypes';
+import type { RatingAction, RatingEntry, RatingEntryValues } from './actionTypes';
 
 function messageFrom(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-function upsertEntry(entries: MoodEntry[], saved: MoodEntry) {
+function upsertEntry(entries: RatingEntry[], saved: RatingEntry) {
   const next = entries.filter((entry) => entry.id !== saved.id);
   next.push(saved);
   return next.sort((left, right) =>
@@ -25,9 +25,9 @@ function upsertEntry(entries: MoodEntry[], saved: MoodEntry) {
   );
 }
 
-export function useMoodActionDetail(actionId?: string) {
-  const [action, setAction] = useState<MoodAction | null>(null);
-  const [entries, setEntries] = useState<MoodEntry[]>([]);
+export function useRatingActionDetail(actionId?: string) {
+  const [action, setAction] = useState<RatingAction | null>(null);
+  const [entries, setEntries] = useState<RatingEntry[]>([]);
   const [loading, setLoading] = useState(Boolean(actionId));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,13 +39,13 @@ export function useMoodActionDetail(actionId?: string) {
     setError(null);
     try {
       const [loadedAction, loadedEntries] = await Promise.all([
-        getMoodAction(actionId),
-        listMoodEntries(actionId),
+        getRatingAction(actionId),
+        listRatingEntries(actionId),
       ]);
       setAction(loadedAction);
       setEntries(loadedEntries);
     } catch (loadError) {
-      setError(messageFrom(loadError, 'The mood check-in could not be loaded.'));
+      setError(messageFrom(loadError, 'The rating check-in could not be loaded.'));
     } finally {
       setLoading(false);
     }
@@ -60,7 +60,7 @@ export function useMoodActionDetail(actionId?: string) {
   const saveDraft = useCallback(
     async (
       entryId: string,
-      values: MoodEntryValues,
+      values: RatingEntryValues,
       expectedRevision: number | null,
     ) => {
       if (!actionId) return null;
@@ -68,7 +68,7 @@ export function useMoodActionDetail(actionId?: string) {
       setError(null);
       setNotice(null);
       try {
-        const saved = await saveMoodEntryDraft({
+        const saved = await saveRatingEntryDraft({
           actionId,
           entryId,
           values,
@@ -90,7 +90,7 @@ export function useMoodActionDetail(actionId?: string) {
   const saveConfirmed = useCallback(
     async (
       entryId: string,
-      values: MoodEntryValues,
+      values: RatingEntryValues,
       expectedRevision: number | null,
       editingConfirmed: boolean,
     ) => {
@@ -103,16 +103,16 @@ export function useMoodActionDetail(actionId?: string) {
       setError(null);
       setNotice(null);
       try {
-        let saved: MoodEntry;
+        let saved: RatingEntry;
         if (editingConfirmed) {
-          saved = await amendMoodEntry({
+          saved = await amendRatingEntry({
             actionId,
             entryId,
             values,
             expectedRevision: expectedRevision as number,
           });
         } else {
-          saved = await confirmMoodEntry({
+          saved = await confirmRatingEntry({
             actionId,
             entryId,
             values,
@@ -120,10 +120,12 @@ export function useMoodActionDetail(actionId?: string) {
           });
         }
         setEntries((current) => upsertEntry(current, saved));
-        setNotice(editingConfirmed ? 'Mood entry updated.' : 'Mood saved for today.');
+        setNotice(editingConfirmed ? 'Rating entry updated.' : 'Rating saved.');
         return saved;
       } catch (saveError) {
-        setError(messageFrom(saveError, 'The mood entry could not be saved. Your input is still here.'));
+        setError(
+          messageFrom(saveError, 'The rating entry could not be saved. Your input is still here.'),
+        );
         return null;
       } finally {
         setBusy(false);
@@ -139,12 +141,12 @@ export function useMoodActionDetail(actionId?: string) {
       setError(null);
       setNotice(null);
       try {
-        await deleteMoodEntry(actionId, entryId);
+        await deleteRatingEntry(actionId, entryId);
         setEntries((current) => current.filter((entry) => entry.id !== entryId));
-        setNotice('Mood entry deleted.');
+        setNotice('Rating entry deleted.');
         return true;
       } catch (deleteError) {
-        setError(messageFrom(deleteError, 'The mood entry could not be deleted.'));
+        setError(messageFrom(deleteError, 'The rating entry could not be deleted.'));
         return false;
       } finally {
         setBusy(false);
@@ -159,7 +161,7 @@ export function useMoodActionDetail(actionId?: string) {
     setError(null);
     setNotice(null);
     try {
-      await deleteMoodAction(actionId);
+      await deleteRatingAction(actionId);
       setAction(null);
       setEntries([]);
       return true;
@@ -178,7 +180,7 @@ export function useMoodActionDetail(actionId?: string) {
       setError(null);
       setNotice(null);
       try {
-        return await exportMoodEntries(actionId, entryIds);
+        return await exportRatingEntries(actionId, entryIds);
       } catch (exportError) {
         setError(messageFrom(exportError, 'The selected entries could not be exported.'));
         return null;

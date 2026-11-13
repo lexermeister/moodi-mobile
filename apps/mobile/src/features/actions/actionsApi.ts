@@ -1,13 +1,13 @@
 import {
-  isMoodAction,
-  isMoodCandidateResolution,
-  isMoodEntry,
-  type MoodAction,
-  type MoodCandidateResolution,
-  type MoodCandidateReviewResult,
-  type MoodEntry,
-  type MoodEntryValues,
-  type RecordMoodActionSettings,
+  isRatingAction,
+  isRatingCandidateResolution,
+  isRatingEntry,
+  type RatingAction,
+  type RatingCandidateResolution,
+  type RatingCandidateReviewResult,
+  type RatingEntry,
+  type RatingEntryValues,
+  type RecordRatingActionSettings,
 } from './actionTypes';
 
 class ActionsApiError extends Error {
@@ -61,29 +61,29 @@ async function requestJson(path: string, init?: RequestInit): Promise<unknown> {
   return body ? parseJson(body) : null;
 }
 
-export async function listMoodActions(recordingId?: string): Promise<MoodAction[]> {
+export async function listRatingActions(recordingId?: string): Promise<RatingAction[]> {
   const query = recordingId ? `?recording_id=${encodeURIComponent(recordingId)}` : '';
   const payload = await requestJson(`/actions${query}`);
   if (
     !payload ||
     typeof payload !== 'object' ||
     !Array.isArray((payload as { actions?: unknown }).actions) ||
-    !(payload as { actions: unknown[] }).actions.every(isMoodAction)
+    !(payload as { actions: unknown[] }).actions.every(isRatingAction)
   ) {
     throw new ActionsApiError('The Moodi backend returned invalid Actions.');
   }
-  return (payload as { actions: MoodAction[] }).actions;
+  return (payload as { actions: RatingAction[] }).actions;
 }
 
-export async function getMoodAction(actionId: string): Promise<MoodAction> {
+export async function getRatingAction(actionId: string): Promise<RatingAction> {
   const payload = await requestJson(`/actions/${encodeURIComponent(actionId)}`);
-  if (!isMoodAction(payload)) {
+  if (!isRatingAction(payload)) {
     throw new ActionsApiError('The Moodi backend returned an invalid Action.');
   }
   return payload;
 }
 
-export async function deleteMoodAction(actionId: string): Promise<void> {
+export async function deleteRatingAction(actionId: string): Promise<void> {
   try {
     await requestJson(`/actions/${encodeURIComponent(actionId)}`, { method: 'DELETE' });
   } catch (error) {
@@ -92,7 +92,7 @@ export async function deleteMoodAction(actionId: string): Promise<void> {
   }
 }
 
-export async function reviewMoodCandidate({
+export async function reviewRatingCandidate({
   recordingId,
   candidateId,
   draftId,
@@ -105,8 +105,8 @@ export async function reviewMoodCandidate({
   draftId: string;
   sourceVersion: string;
   disposition: 'activate' | 'reject';
-  settings: RecordMoodActionSettings | null;
-}): Promise<MoodCandidateReviewResult> {
+  settings: RecordRatingActionSettings | null;
+}): Promise<RatingCandidateReviewResult> {
   const payload = await requestJson(
     `/recordings/${recordingId}/action-candidates/${candidateId}/review`,
     {
@@ -129,33 +129,33 @@ export async function reviewMoodCandidate({
     (responseDisposition !== 'activated' &&
       responseDisposition !== 'linked_existing' &&
       responseDisposition !== 'rejected') ||
-    (action !== null && !isMoodAction(action))
+    (action !== null && !isRatingAction(action))
   ) {
     throw new ActionsApiError('The Moodi backend returned an invalid Action.');
   }
   return {
     disposition: responseDisposition,
-    action: action as MoodAction | null,
+    action: action as RatingAction | null,
   };
 }
 
-export async function getMoodCandidateResolution(
+export async function getRatingCandidateResolution(
   recordingId: string,
   candidateId: string,
-): Promise<MoodCandidateResolution> {
+): Promise<RatingCandidateResolution> {
   const payload = await requestJson(
     `/recordings/${encodeURIComponent(recordingId)}/action-candidates/${encodeURIComponent(candidateId)}/resolution`,
   );
-  if (!isMoodCandidateResolution(payload)) {
+  if (!isRatingCandidateResolution(payload)) {
     throw new ActionsApiError('The Moodi backend returned an invalid Action resolution.');
   }
   return payload;
 }
 
-export async function getMoodCandidateReview(
+export async function getRatingCandidateReview(
   recordingId: string,
   candidateId: string,
-): Promise<MoodCandidateReviewResult | null> {
+): Promise<RatingCandidateReviewResult | null> {
   let payload: unknown;
   try {
     payload = await requestJson(
@@ -174,37 +174,37 @@ export async function getMoodCandidateReview(
     (disposition !== 'activated' &&
       disposition !== 'linked_existing' &&
       disposition !== 'rejected') ||
-    (action !== null && !isMoodAction(action))
+    (action !== null && !isRatingAction(action))
   ) {
     throw new ActionsApiError('The Moodi backend returned an invalid Action review.');
   }
   return {
-    disposition: disposition as MoodCandidateReviewResult['disposition'],
-    action: action as MoodAction | null,
+    disposition: disposition as RatingCandidateReviewResult['disposition'],
+    action: action as RatingAction | null,
   };
 }
 
-export async function listMoodEntries(actionId: string): Promise<MoodEntry[]> {
+export async function listRatingEntries(actionId: string): Promise<RatingEntry[]> {
   const payload = await requestJson(`/actions/${actionId}/entries`);
   if (
     !payload ||
     typeof payload !== 'object' ||
     !Array.isArray((payload as { entries?: unknown }).entries) ||
-    !(payload as { entries: unknown[] }).entries.every(isMoodEntry)
+    !(payload as { entries: unknown[] }).entries.every(isRatingEntry)
   ) {
-    throw new ActionsApiError('The Moodi backend returned invalid mood entries.');
+    throw new ActionsApiError('The Moodi backend returned invalid rating entries.');
   }
-  return (payload as { entries: MoodEntry[] }).entries;
+  return (payload as { entries: RatingEntry[] }).entries;
 }
 
-function requireMoodEntry(value: unknown): MoodEntry {
-  if (!isMoodEntry(value)) {
-    throw new ActionsApiError('The Moodi backend returned an invalid mood entry.');
+function requireRatingEntry(value: unknown): RatingEntry {
+  if (!isRatingEntry(value)) {
+    throw new ActionsApiError('The Moodi backend returned an invalid rating entry.');
   }
   return value;
 }
 
-export async function saveMoodEntryDraft({
+export async function saveRatingEntryDraft({
   actionId,
   entryId,
   values,
@@ -212,10 +212,10 @@ export async function saveMoodEntryDraft({
 }: {
   actionId: string;
   entryId: string;
-  values: MoodEntryValues;
+  values: RatingEntryValues;
   expectedRevision: number | null;
-}): Promise<MoodEntry> {
-  return requireMoodEntry(
+}): Promise<RatingEntry> {
+  return requireRatingEntry(
     await requestJson(`/actions/${actionId}/entries/${entryId}/draft`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -224,7 +224,7 @@ export async function saveMoodEntryDraft({
   );
 }
 
-export async function confirmMoodEntry({
+export async function confirmRatingEntry({
   actionId,
   entryId,
   values,
@@ -232,10 +232,10 @@ export async function confirmMoodEntry({
 }: {
   actionId: string;
   entryId: string;
-  values: MoodEntryValues;
+  values: RatingEntryValues;
   expectedRevision: number | null;
-}): Promise<MoodEntry> {
-  return requireMoodEntry(
+}): Promise<RatingEntry> {
+  return requireRatingEntry(
     await requestJson(`/actions/${actionId}/entries/${entryId}/confirm`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -248,7 +248,7 @@ export async function confirmMoodEntry({
   );
 }
 
-export async function amendMoodEntry({
+export async function amendRatingEntry({
   actionId,
   entryId,
   values,
@@ -256,10 +256,10 @@ export async function amendMoodEntry({
 }: {
   actionId: string;
   entryId: string;
-  values: MoodEntryValues;
+  values: RatingEntryValues;
   expectedRevision: number;
-}): Promise<MoodEntry> {
-  return requireMoodEntry(
+}): Promise<RatingEntry> {
+  return requireRatingEntry(
     await requestJson(`/actions/${actionId}/entries/${entryId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -268,14 +268,14 @@ export async function amendMoodEntry({
   );
 }
 
-export async function deleteMoodEntry(actionId: string, entryId: string): Promise<void> {
+export async function deleteRatingEntry(actionId: string, entryId: string): Promise<void> {
   await requestJson(
     `/actions/${encodeURIComponent(actionId)}/entries/${encodeURIComponent(entryId)}`,
     { method: 'DELETE' },
   );
 }
 
-export async function exportMoodEntries(actionId: string, entryIds: string[]): Promise<unknown> {
+export async function exportRatingEntries(actionId: string, entryIds: string[]): Promise<unknown> {
   return requestJson(`/actions/${actionId}/entries/export`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

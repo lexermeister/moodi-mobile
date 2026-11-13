@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { MoodTodayScreen } from '@/features/actions/MoodTodayScreen';
+import { RatingTodayScreen } from '@/features/actions/RatingTodayScreen';
 
 export default function ActionTodayRoute() {
   const router = useRouter();
@@ -25,18 +25,18 @@ export default function ActionTodayRoute() {
             style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
             <Text style={styles.backText}>‹ Back</Text>
           </Pressable>
-          <Text style={styles.title}>{entryId ? 'Edit mood entry' : 'Today'}</Text>
+          <Text style={styles.title}>{entryId ? 'Edit rating entry' : 'Today'}</Text>
           <Text style={styles.subtitle}>
-            {entryId ? 'Correct a saved entry.' : 'Your mood check-in, ready when you are.'}
+            {entryId ? 'Correct a saved entry.' : 'Your check-in, ready when you are.'}
           </Text>
         </View>
         {typeof actionId === 'string' ? (
-          <MoodTodayScreen
+          <RatingTodayScreen
             actionId={actionId}
             entryId={typeof entryId === 'string' ? entryId : undefined}
           />
         ) : (
-          <Text style={styles.errorText}>This mood check-in could not be opened.</Text>
+          <Text style={styles.errorText}>This rating check-in could not be opened.</Text>
         )}
       </ScrollView>
     </SafeAreaView>

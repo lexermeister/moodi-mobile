@@ -1,4 +1,4 @@
-import type { RecordMoodActionSettings } from './actionTypes';
+import type { RecordRatingActionSettings } from './actionTypes';
 
 export function formatClockTime(value: string) {
   const [hours, minutes] = value.split(':').map(Number);
@@ -13,7 +13,7 @@ function sentenceCase(value: string) {
   return value ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
 }
 
-export function formatActionCadence(settings: RecordMoodActionSettings) {
+export function formatActionCadence(settings: RecordRatingActionSettings) {
   if (settings.preferred_check_in_time) {
     return `Daily at ${formatClockTime(settings.preferred_check_in_time)}`;
   }
@@ -22,7 +22,7 @@ export function formatActionCadence(settings: RecordMoodActionSettings) {
     .join(' · ');
 }
 
-export function formatActionDuration(settings: RecordMoodActionSettings) {
+export function formatActionDuration(settings: RecordRatingActionSettings) {
   return settings.duration_kind === 'ongoing'
     ? 'Ongoing'
     : `${settings.duration_days ?? 1} days`;

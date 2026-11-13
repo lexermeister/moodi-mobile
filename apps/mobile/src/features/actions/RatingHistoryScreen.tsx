@@ -9,10 +9,11 @@ import {
   View,
 } from 'react-native';
 
-import type { MoodAction, MoodEntry } from './actionTypes';
+import type { RatingAction, RatingEntry } from './actionTypes';
 import { currentDayKey, getActionProgress } from './actionStatus';
-import { shareMoodExport } from './shareMoodExport';
-import { useMoodActionDetail } from './useMoodActionDetail';
+import { getRatingMetricPresentation } from './ratingMetrics';
+import { shareRatingExport } from './shareRatingExport';
+import { useRatingActionDetail } from './useRatingActionDetail';
 
 type Props = {
   actionId: string;
@@ -24,7 +25,7 @@ function dateKeyToTimestamp(dateKey: string) {
   return Date.parse(`${dateKey}T00:00:00.000Z`);
 }
 
-function elapsedDayCount(action: MoodAction) {
+function elapsedDayCount(action: RatingAction) {
   const { endDate, startDate } = getActionProgress(action);
   const today = currentDayKey();
   if (today < startDate) return 0;
@@ -32,22 +33,22 @@ function elapsedDayCount(action: MoodAction) {
   return Math.floor((dateKeyToTimestamp(cutoff) - dateKeyToTimestamp(startDate)) / DAY_MS) + 1;
 }
 
-function formatEntryDate(entry: MoodEntry) {
+function formatEntryDate(entry: RatingEntry) {
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(entry.values.entry_time));
 }
 
-function entryValue(entry: MoodEntry) {
-  return entry.values.mood_value !== null
-    ? `${entry.values.mood_value}/10`
-    : entry.values.mood_label ?? 'Text-only entry';
+function entryValue(entry: RatingEntry) {
+  return entry.values.rating_value !== null
+    ? `${entry.values.rating_value}/10`
+    : entry.values.rating_label ?? 'Text-only entry';
 }
 
-export function MoodHistoryScreen({ actionId }: Props) {
+export function RatingHistoryScreen({ actionId }: Props) {
   const router = useRouter();
-  const detail = useMoodActionDetail(actionId);
+  const detail = useRatingActionDetail(actionId);
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [shareError, setShareError] = useState<string | null>(null);
@@ -72,7 +73,7 @@ export function MoodHistoryScreen({ actionId }: Props) {
   if (!detail.action) {
     return (
       <View style={styles.messageCard}>
-        <Text style={styles.errorText}>{detail.error ?? 'Mood history could not be loaded.'}</Text>
+        <Text style={styles.errorText}>{detail.error ?? 'Rating history could not be loaded.'}</Text>
         <Pressable
           accessibilityRole="button"
           onPress={() => void detail.reload()}
@@ -83,6 +84,7 @@ export function MoodHistoryScreen({ actionId }: Props) {
     );
   }
 
+  const presentation = getRatingMetricPresentation(detail.action.metric);
   const elapsedDays = elapsedDayCount(detail.action);
 
   const startSelecting = () => {
@@ -106,9 +108,9 @@ export function MoodHistoryScreen({ actionId }: Props) {
     const payload = await detail.prepareExport([...selectedIds]);
     if (!payload) return;
     try {
-      await shareMoodExport(payload);
+      await shareRatingExport(payload);
       setSelecting(false);
-      setShareNotice('Selected mood entries exported.');
+      setShareNotice(`Selected ${presentation.checkInTitle.toLowerCase()} entries exported.`);
     } catch (shareFailure) {
       setShareError(
         shareFailure instanceof Error && shareFailure.message
@@ -118,8 +120,8 @@ export function MoodHistoryScreen({ actionId }: Props) {
     }
   };
 
-  const confirmDelete = (entry: MoodEntry) => {
-    Alert.alert('Delete mood entry?', 'This removes the selected entry.', [
+  const confirmDelete = (entry: RatingEntry) => {
+    Alert.alert('Delete rating entry?', 'This removes the selected entry.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -132,7 +134,7 @@ export function MoodHistoryScreen({ actionId }: Props) {
   const confirmDeleteAction = () => {
     Alert.alert(
       'Permanently delete this Action?',
-      'This deletes the Action and all of its saved mood entries and drafts. Your original session insights will remain. This cannot be undone.',
+      `This deletes the Action and all of its saved ${presentation.checkInTitle.toLowerCase()} entries and drafts. Your original session insights will remain. This cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -150,6 +152,7 @@ export function MoodHistoryScreen({ actionId }: Props) {
 
   return (
     <View style={styles.screen}>
+      <Text style={styles.historyTitle}>{presentation.historyTitle}</Text>
       <View style={styles.coverageCard}>
         <Text style={styles.coverageValue}>
           {confirmedDayCount} of {elapsedDays} elapsed days recorded
@@ -266,7 +269,9 @@ export function MoodHistoryScreen({ actionId }: Props) {
         </View>
       ) : (
         <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>No mood entries yet</Text>
+          <Text style={styles.emptyTitle}>
+            No {presentation.checkInTitle.toLowerCase()} entries yet
+          </Text>
           <Text style={styles.coverageNote}>Your saved check-ins will appear here.</Text>
         </View>
       )}
@@ -276,7 +281,7 @@ export function MoodHistoryScreen({ actionId }: Props) {
           <View style={styles.dangerCopy}>
             <Text style={styles.dangerTitle}>Delete Action</Text>
             <Text style={styles.coverageNote}>
-              Permanently remove this Action and all of its mood entries and drafts.
+              Permanently remove this Action and all of its rating entries and drafts.
             </Text>
           </View>
           <Pressable
@@ -308,6 +313,7 @@ const colors = {
 
 const styles = StyleSheet.create({
   screen: { gap: 16 },
+  historyTitle: { color: colors.ink, fontSize: 22, fontWeight: '900' },
   loading: { marginTop: 60 },
   coverageCard: { backgroundColor: '#eef6ef', borderRadius: 14, gap: 5, padding: 15 },
   coverageValue: { color: colors.ink, fontSize: 16, fontWeight: '900' },

@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { MoodHistoryScreen } from '@/features/actions/MoodHistoryScreen';
+import { RatingHistoryScreen } from '@/features/actions/RatingHistoryScreen';
 
 export default function ActionHistoryRoute() {
   const router = useRouter();
@@ -13,19 +13,19 @@ export default function ActionHistoryRoute() {
       <ScrollView contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic">
         <View style={styles.header}>
           <Pressable
-            accessibilityLabel="Back to mood check-in"
+            accessibilityLabel="Back to check-in"
             accessibilityRole="button"
             onPress={() => router.back()}
             style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
-            <Text style={styles.backText}>‹ Mood check-in</Text>
+            <Text style={styles.backText}>‹ Check-in</Text>
           </Pressable>
-          <Text style={styles.title}>Mood history</Text>
+          <Text style={styles.title}>Rating history</Text>
           <Text style={styles.subtitle}>A factual record of the entries you saved.</Text>
         </View>
         {typeof actionId === 'string' ? (
-          <MoodHistoryScreen actionId={actionId} />
+          <RatingHistoryScreen actionId={actionId} />
         ) : (
-          <Text style={styles.errorText}>Mood history could not be opened.</Text>
+          <Text style={styles.errorText}>Rating history could not be opened.</Text>
         )}
       </ScrollView>
     </SafeAreaView>

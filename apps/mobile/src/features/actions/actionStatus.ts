@@ -1,5 +1,5 @@
-import type { MoodAction, MoodEntry } from './actionTypes';
-import { dayKeyAtCapturedOffset } from './moodDomain';
+import type { RatingAction, RatingEntry } from './actionTypes';
+import { dayKeyAtCapturedOffset } from './ratingDomain';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -11,11 +11,11 @@ export function currentDayKey(now = new Date()) {
   return dayKeyAtCapturedOffset(now.toISOString(), -now.getTimezoneOffset());
 }
 
-function actionStartDate(action: MoodAction) {
+function actionStartDate(action: RatingAction) {
   return action.settings.start_date ?? action.created_at.slice(0, 10);
 }
 
-function actionEndDate(action: MoodAction) {
+function actionEndDate(action: RatingAction) {
   if (action.settings.duration_kind === 'ongoing') return null;
   const startDate = actionStartDate(action);
   return (
@@ -28,7 +28,7 @@ function actionEndDate(action: MoodAction) {
   );
 }
 
-export function getActionProgress(action: MoodAction, today = currentDayKey()) {
+export function getActionProgress(action: RatingAction, today = currentDayKey()) {
   const startDate = actionStartDate(action);
   const endDate = actionEndDate(action);
   const rawDay =
@@ -45,7 +45,7 @@ export function getActionProgress(action: MoodAction, today = currentDayKey()) {
   };
 }
 
-export function getTodayEntry(entries: MoodEntry[], today = currentDayKey()) {
+export function getTodayEntry(entries: RatingEntry[], today = currentDayKey()) {
   return entries
     .filter((entry) => entry.values.day_key === today)
     .sort((left, right) => {
@@ -63,7 +63,7 @@ export function formatActionDate(dateKey: string) {
   }).format(new Date(`${dateKey}T00:00:00.000Z`));
 }
 
-export function formatActionDateRange(action: MoodAction) {
+export function formatActionDateRange(action: RatingAction) {
   const { startDate, endDate } = getActionProgress(action);
   if (endDate === null) return `Started ${formatActionDate(startDate)} · Ongoing`;
   return `${formatActionDate(startDate)} – ${formatActionDate(endDate)}`;

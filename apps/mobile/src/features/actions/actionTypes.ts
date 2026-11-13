@@ -1,6 +1,9 @@
-export type MoodScaleDefinition = {
+export type RatingMetric = 'mood' | 'motivation' | 'sleep_quality';
+export type RatingConstruct = 'overall_day_mood' | 'daily_motivation' | 'sleep_quality';
+
+export type RatingScaleDefinition = {
   id: string;
-  construct: 'overall_day_mood';
+  construct: RatingConstruct;
   minimum: 0;
   maximum: 10;
   minimum_label: string;
@@ -9,18 +12,19 @@ export type MoodScaleDefinition = {
   version: string;
 };
 
-export type RecordMoodConfiguration = {
+export type RecordRatingConfiguration = {
   input_kind: 'numeric_0_10' | 'label';
   context_enabled: boolean;
-  scale: MoodScaleDefinition | null;
+  scale: RatingScaleDefinition | null;
   scale_origin: 'session' | 'moodi_default' | null;
 };
 
-export type RecordMoodCandidate = {
+export type RecordRatingCandidate = {
   id: string;
-  type: 'record_mood';
+  type: 'record_rating';
   state: 'review_ready';
   actor: 'client';
+  metric: RatingMetric;
   exact_task: string;
   source_excerpt: string;
   frequency: string | null;
@@ -29,12 +33,12 @@ export type RecordMoodCandidate = {
   start_date: string | null;
   end_date: string | null;
   duration_days: 14;
-  configuration: RecordMoodConfiguration | null;
+  configuration: RecordRatingConfiguration | null;
   unknowns: string[];
   source_ids: string[];
 };
 
-export type RecordMoodActionSettings = {
+export type RecordRatingActionSettings = {
   exact_task: string;
   frequency: string;
   timing: string | null;
@@ -46,31 +50,32 @@ export type RecordMoodActionSettings = {
   preferred_check_in_time: string | null;
   preferred_time_zone: string | null;
   schedule_origin: 'moodi_default' | 'user_selected';
-  configuration: RecordMoodConfiguration;
+  configuration: RecordRatingConfiguration;
 };
 
-export type MoodAction = {
+export type RatingAction = {
   id: string;
-  type: 'record_mood';
+  type: 'record_rating';
+  metric: RatingMetric;
   state: 'active' | 'paused' | 'superseded';
   recording_id: string;
   transcript_version: string;
   candidate_id: string;
   source_ids: string[];
   source_excerpt: string;
-  settings: RecordMoodActionSettings;
+  settings: RecordRatingActionSettings;
   created_at: string;
   revision: number;
 };
 
-export type MoodCandidateReviewDisposition = 'activated' | 'linked_existing' | 'rejected';
+export type RatingCandidateReviewDisposition = 'activated' | 'linked_existing' | 'rejected';
 
-export type MoodCandidateReviewResult = {
-  disposition: MoodCandidateReviewDisposition;
-  action: MoodAction | null;
+export type RatingCandidateReviewResult = {
+  disposition: RatingCandidateReviewDisposition;
+  action: RatingAction | null;
 };
 
-export type MoodCandidateResolutionStatus =
+export type RatingCandidateResolutionStatus =
   | 'needs_setup'
   | 'already_active'
   | 'activated'
@@ -78,41 +83,41 @@ export type MoodCandidateResolutionStatus =
   | 'rejected'
   | 'conflict';
 
-export type MoodCandidateResolution = {
+export type RatingCandidateResolution = {
   recording_id: string;
   candidate_id: string;
   draft_id: string;
   source_version: string;
-  status: MoodCandidateResolutionStatus;
-  action: MoodAction | null;
+  status: RatingCandidateResolutionStatus;
+  action: RatingAction | null;
   reason: 'incompatible_ongoing_action' | null;
 };
 
-export type MoodEntryValues = {
+export type RatingEntryValues = {
   relevant_date: string;
   entry_time: string;
   timezone_offset_minutes: number;
   day_key: string;
-  mood_value: number | null;
-  mood_label: string | null;
+  rating_value: number | null;
+  rating_label: string | null;
   context: string | null;
   scale_id: string | null;
 };
 
-export type MoodEntryRevision = {
+export type RatingEntryRevision = {
   revision: number;
-  values: MoodEntryValues;
+  values: RatingEntryValues;
   status: 'draft' | 'confirmed';
   changed_at: string;
 };
 
-export type MoodEntry = {
+export type RatingEntry = {
   id: string;
   action_id: string;
   status: 'draft' | 'confirmed';
-  values: MoodEntryValues;
+  values: RatingEntryValues;
   revision: number;
-  revision_history: MoodEntryRevision[];
+  revision_history: RatingEntryRevision[];
   idempotency_key: string | null;
   created_at: string;
   updated_at: string;
@@ -131,7 +136,20 @@ function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === 'string';
 }
 
-export function isRecordMoodConfiguration(value: unknown): value is RecordMoodConfiguration {
+function isRatingMetric(value: unknown): value is RatingMetric {
+  return value === 'mood' || value === 'motivation' || value === 'sleep_quality';
+}
+
+const expectedScaleByMetric: Record<
+  RatingMetric,
+  { construct: RatingConstruct; scaleId: string }
+> = {
+  mood: { construct: 'overall_day_mood', scaleId: 'overall-day-mood-0-10-v1' },
+  motivation: { construct: 'daily_motivation', scaleId: 'motivation-0-10-v1' },
+  sleep_quality: { construct: 'sleep_quality', scaleId: 'sleep-quality-0-10-v1' },
+};
+
+export function isRecordRatingConfiguration(value: unknown): value is RecordRatingConfiguration {
   if (!isObject(value)) return false;
   const scale = value.scale;
   return (
@@ -143,7 +161,9 @@ export function isRecordMoodConfiguration(value: unknown): value is RecordMoodCo
     (scale === null ||
       (isObject(scale) &&
         typeof scale.id === 'string' &&
-        scale.construct === 'overall_day_mood' &&
+        (scale.construct === 'overall_day_mood' ||
+          scale.construct === 'daily_motivation' ||
+          scale.construct === 'sleep_quality') &&
         scale.minimum === 0 &&
         scale.maximum === 10 &&
         typeof scale.minimum_label === 'string' &&
@@ -153,13 +173,19 @@ export function isRecordMoodConfiguration(value: unknown): value is RecordMoodCo
   );
 }
 
-export function isRecordMoodCandidate(value: unknown): value is RecordMoodCandidate {
+export function isRecordRatingCandidate(value: unknown): value is RecordRatingCandidate {
   if (!isObject(value)) return false;
+  const configuration = value.configuration;
+  const metric = value.metric;
+  const scale = isObject(configuration) && isObject(configuration.scale)
+    ? configuration.scale
+    : null;
   return (
     typeof value.id === 'string' &&
-    value.type === 'record_mood' &&
+    value.type === 'record_rating' &&
     value.state === 'review_ready' &&
     value.actor === 'client' &&
+    isRatingMetric(metric) &&
     typeof value.exact_task === 'string' &&
     typeof value.source_excerpt === 'string' &&
     isNullableString(value.frequency) &&
@@ -168,13 +194,17 @@ export function isRecordMoodCandidate(value: unknown): value is RecordMoodCandid
     isNullableString(value.start_date) &&
     isNullableString(value.end_date) &&
     value.duration_days === 14 &&
-    (value.configuration === null || isRecordMoodConfiguration(value.configuration)) &&
+    (configuration === null || isRecordRatingConfiguration(configuration)) &&
+    (scale === null ||
+      (isRatingMetric(metric) &&
+        scale.construct === expectedScaleByMetric[metric].construct &&
+        scale.id === expectedScaleByMetric[metric].scaleId)) &&
     isStringArray(value.unknowns) &&
     isStringArray(value.source_ids)
   );
 }
 
-function isMoodActionSettings(value: unknown): value is RecordMoodActionSettings {
+function isRatingActionSettings(value: unknown): value is RecordRatingActionSettings {
   if (!isObject(value)) return false;
   const durationIsValid =
     (value.duration_kind === 'fixed' &&
@@ -200,28 +230,39 @@ function isMoodActionSettings(value: unknown): value is RecordMoodActionSettings
     durationIsValid &&
     preferredTimeIsValid &&
     (value.schedule_origin === 'moodi_default' || value.schedule_origin === 'user_selected') &&
-    isRecordMoodConfiguration(value.configuration)
+    isRecordRatingConfiguration(value.configuration)
   );
 }
 
-export function isMoodAction(value: unknown): value is MoodAction {
+export function isRatingAction(value: unknown): value is RatingAction {
+  const metric = isObject(value) ? value.metric : null;
+  const settings = isObject(value) ? value.settings : null;
+  const configuration = isObject(settings) ? settings.configuration : null;
+  const scale = isObject(configuration) && isObject(configuration.scale)
+    ? configuration.scale
+    : null;
   return (
     isObject(value) &&
     typeof value.id === 'string' &&
-    value.type === 'record_mood' &&
+    value.type === 'record_rating' &&
+    isRatingMetric(metric) &&
     ['active', 'paused', 'superseded'].includes(value.state as string) &&
     typeof value.recording_id === 'string' &&
     typeof value.transcript_version === 'string' &&
     typeof value.candidate_id === 'string' &&
     isStringArray(value.source_ids) &&
     typeof value.source_excerpt === 'string' &&
-    isMoodActionSettings(value.settings) &&
+    isRatingActionSettings(settings) &&
+    (scale === null ||
+      (isRatingMetric(metric) &&
+        scale.construct === expectedScaleByMetric[metric].construct &&
+        scale.id === expectedScaleByMetric[metric].scaleId)) &&
     typeof value.created_at === 'string' &&
     typeof value.revision === 'number'
   );
 }
 
-export function isMoodCandidateResolution(value: unknown): value is MoodCandidateResolution {
+export function isRatingCandidateResolution(value: unknown): value is RatingCandidateResolution {
   if (!isObject(value)) return false;
   const status = value.status;
   const action = value.action;
@@ -244,32 +285,32 @@ export function isMoodCandidateResolution(value: unknown): value is MoodCandidat
       'rejected',
       'conflict',
     ].includes(status as string) &&
-    (actionRequired ? isMoodAction(action) : action === null) &&
+    (actionRequired ? isRatingAction(action) : action === null) &&
     (value.reason === null || value.reason === 'incompatible_ongoing_action')
   );
 }
 
-function isMoodEntryValues(value: unknown): value is MoodEntryValues {
+function isRatingEntryValues(value: unknown): value is RatingEntryValues {
   return (
     isObject(value) &&
     typeof value.relevant_date === 'string' &&
     typeof value.entry_time === 'string' &&
     typeof value.timezone_offset_minutes === 'number' &&
     typeof value.day_key === 'string' &&
-    (value.mood_value === null || typeof value.mood_value === 'number') &&
-    isNullableString(value.mood_label) &&
+    (value.rating_value === null || typeof value.rating_value === 'number') &&
+    isNullableString(value.rating_label) &&
     isNullableString(value.context) &&
     isNullableString(value.scale_id)
   );
 }
 
-export function isMoodEntry(value: unknown): value is MoodEntry {
+export function isRatingEntry(value: unknown): value is RatingEntry {
   return (
     isObject(value) &&
     typeof value.id === 'string' &&
     typeof value.action_id === 'string' &&
     (value.status === 'draft' || value.status === 'confirmed') &&
-    isMoodEntryValues(value.values) &&
+    isRatingEntryValues(value.values) &&
     typeof value.revision === 'number' &&
     Array.isArray(value.revision_history) &&
     isNullableString(value.idempotency_key) &&

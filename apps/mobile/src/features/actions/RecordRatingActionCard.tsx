@@ -13,31 +13,32 @@ import {
 } from 'react-native';
 
 import {
-  amendMoodEntry,
-  confirmMoodEntry,
-  deleteMoodEntry,
-  exportMoodEntries,
-  getMoodAction,
-  getMoodCandidateResolution,
-  listMoodEntries,
-  reviewMoodCandidate,
-  saveMoodEntryDraft,
+  amendRatingEntry,
+  confirmRatingEntry,
+  deleteRatingEntry,
+  exportRatingEntries,
+  getRatingAction,
+  getRatingCandidateResolution,
+  listRatingEntries,
+  reviewRatingCandidate,
+  saveRatingEntryDraft,
 } from './actionsApi';
 import type {
-  MoodAction,
-  MoodEntry,
-  MoodEntryValues,
-  RecordMoodActionSettings,
-  RecordMoodCandidate,
+  RatingAction,
+  RatingEntry,
+  RatingEntryValues,
+  RecordRatingActionSettings,
+  RecordRatingCandidate,
 } from './actionTypes';
 import { formatActionDateRange, getActionProgress, getTodayEntry } from './actionStatus';
 import {
   createUuid,
   dayKeyAtCapturedOffset,
-  normalizeMoodContext,
-  parseMoodScore,
-} from './moodDomain';
-import { shareMoodExport } from './shareMoodExport';
+  normalizeRatingContext,
+  parseRatingScore,
+} from './ratingDomain';
+import { getRatingMetricPresentation } from './ratingMetrics';
+import { shareRatingExport } from './shareRatingExport';
 import {
   formatActionCadence,
   formatActionDuration,
@@ -49,12 +50,12 @@ type Props = {
   actionId?: string;
   draftId?: string;
   sourceVersion?: string;
-  candidate?: RecordMoodCandidate;
+  candidate?: RecordRatingCandidate;
   compactWhenActive?: boolean;
-  onSessionStateChange?: (status: RecordMoodSessionState) => void;
+  onSessionStateChange?: (status: RecordRatingSessionState) => void;
 };
 
-export type RecordMoodSessionState =
+export type RecordRatingSessionState =
   | 'loading'
   | 'needs_setup'
   | 'active'
@@ -69,8 +70,8 @@ function messageFrom(error: unknown, fallback: string) {
 }
 
 function settingsFromCandidate(
-  candidate: RecordMoodCandidate,
-): RecordMoodActionSettings | null {
+  candidate: RecordRatingCandidate,
+): RecordRatingActionSettings | null {
   if (
     !candidate.frequency ||
     !candidate.reference_period ||
@@ -107,7 +108,7 @@ function settingsFromCandidate(
 
 type DurationChoice = '7' | '14' | '30' | 'custom' | 'ongoing';
 
-function durationChoiceFrom(settings: RecordMoodActionSettings): DurationChoice {
+function durationChoiceFrom(settings: RecordRatingActionSettings): DurationChoice {
   if (settings.duration_kind === 'ongoing') return 'ongoing';
   if (settings.duration_days === 7) return '7';
   if (settings.duration_days === 14) return '14';
@@ -144,7 +145,7 @@ function formatEntryDate(entryTime: string) {
   }).format(new Date(entryTime));
 }
 
-export function RecordMoodActionCard({
+export function RecordRatingActionCard({
   recordingId,
   actionId,
   draftId,
@@ -154,12 +155,12 @@ export function RecordMoodActionCard({
   onSessionStateChange,
 }: Props) {
   const router = useRouter();
-  const [action, setAction] = useState<MoodAction | null>(null);
-  const [existingAction, setExistingAction] = useState<MoodAction | null>(null);
+  const [action, setAction] = useState<RatingAction | null>(null);
+  const [existingAction, setExistingAction] = useState<RatingAction | null>(null);
   const [resolutionStatus, setResolutionStatus] = useState<
     'needs_setup' | 'activated' | 'linked_existing' | 'already_active' | 'rejected' | 'conflict'
   >('needs_setup');
-  const [entries, setEntries] = useState<MoodEntry[]>([]);
+  const [entries, setEntries] = useState<RatingEntry[]>([]);
   const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(() => new Set());
   const [rejected, setRejected] = useState(false);
   const [loading, setLoading] = useState(Boolean(recordingId || actionId));
@@ -174,10 +175,10 @@ export function RecordMoodActionCard({
   const [timezoneOffsetMinutes, setTimezoneOffsetMinutes] = useState(
     () => -new Date().getTimezoneOffset(),
   );
-  const [moodValue, setMoodValue] = useState<number | null>(null);
-  const [moodLabel, setMoodLabel] = useState('');
+  const [ratingValue, setRatingValue] = useState<number | null>(null);
+  const [ratingLabel, setRatingLabel] = useState('');
   const [context, setContext] = useState('');
-  const [reviewedSettings, setReviewedSettings] = useState<RecordMoodActionSettings | null>(() =>
+  const [reviewedSettings, setReviewedSettings] = useState<RecordRatingActionSettings | null>(() =>
     candidate ? settingsFromCandidate(candidate) : null,
   );
   const [editingSchedule, setEditingSchedule] = useState(false);
@@ -186,16 +187,19 @@ export function RecordMoodActionCard({
   const [draftDurationChoice, setDraftDurationChoice] =
     useState<DurationChoice>('14');
   const [draftCustomDays, setDraftCustomDays] = useState('14');
+  const metric = candidate?.metric ?? action?.metric ?? existingAction?.metric ?? 'mood';
+  const presentation = getRatingMetricPresentation(metric);
+  const metricLabel = presentation.checkInTitle.replace(' check-in', '');
 
-  const editEntry = useCallback((entry: MoodEntry, announce = true) => {
+  const editEntry = useCallback((entry: RatingEntry, announce = true) => {
     setEntryId(entry.id);
     setEntryRevision(entry.revision);
     setEditingConfirmed(entry.status === 'confirmed');
     setReviewing(false);
     setEntryTime(entry.values.entry_time);
     setTimezoneOffsetMinutes(entry.values.timezone_offset_minutes);
-    setMoodValue(entry.values.mood_value);
-    setMoodLabel(entry.values.mood_label ?? '');
+    setRatingValue(entry.values.rating_value);
+    setRatingLabel(entry.values.rating_label ?? '');
     setContext(entry.values.context ?? '');
     if (announce) {
       setNotice(entry.status === 'draft' ? 'Draft resumed.' : 'Editing saved entry.');
@@ -204,8 +208,8 @@ export function RecordMoodActionCard({
   }, []);
 
   const refreshEntries = useCallback(
-    async (activeAction: MoodAction, openTodayEntry = false) => {
-      const loaded = await listMoodEntries(activeAction.id);
+    async (activeAction: RatingAction, openTodayEntry = false) => {
+      const loaded = await listRatingEntries(activeAction.id);
       setEntries(loaded);
       const available = new Set(
         loaded.filter((entry) => entry.status === 'confirmed').map((entry) => entry.id),
@@ -230,7 +234,7 @@ export function RecordMoodActionCard({
     const load = async () => {
       try {
         if (actionId) {
-          const loadedAction = await getMoodAction(actionId);
+          const loadedAction = await getRatingAction(actionId);
           if (!active) return;
           setAction(loadedAction);
           await refreshEntries(loadedAction, true);
@@ -238,7 +242,7 @@ export function RecordMoodActionCard({
         }
         if (!recordingId) return;
         const resolution = candidate
-          ? await getMoodCandidateResolution(recordingId, candidate.id)
+          ? await getRatingCandidateResolution(recordingId, candidate.id)
           : null;
         if (!active) return;
         const activeAction =
@@ -300,43 +304,43 @@ export function RecordMoodActionCard({
     setReviewing(false);
     setEntryTime(now.toISOString());
     setTimezoneOffsetMinutes(-now.getTimezoneOffset());
-    setMoodValue(null);
-    setMoodLabel('');
+    setRatingValue(null);
+    setRatingLabel('');
     setContext('');
   }, []);
 
-  const values = useMemo((): MoodEntryValues | null => {
+  const values = useMemo((): RatingEntryValues | null => {
     if (!action) return null;
     try {
       const dayKey = dayKeyAtCapturedOffset(entryTime, timezoneOffsetMinutes);
       const configuration = action.settings.configuration;
       const numericValue =
-        configuration.input_kind === 'numeric_0_10' && moodValue !== null
-          ? parseMoodScore(moodValue)
+        configuration.input_kind === 'numeric_0_10' && ratingValue !== null
+          ? parseRatingScore(ratingValue)
           : null;
       const label =
-        configuration.input_kind === 'label' && moodLabel.trim() ? moodLabel.trim() : null;
+        configuration.input_kind === 'label' && ratingLabel.trim() ? ratingLabel.trim() : null;
       return {
         relevant_date: dayKey,
         entry_time: entryTime,
         timezone_offset_minutes: timezoneOffsetMinutes,
         day_key: dayKey,
-        mood_value: numericValue,
-        mood_label: label,
-        context: configuration.context_enabled ? normalizeMoodContext(context) : null,
+        rating_value: numericValue,
+        rating_label: label,
+        context: configuration.context_enabled ? normalizeRatingContext(context) : null,
         scale_id: numericValue === null ? null : configuration.scale?.id ?? null,
       };
     } catch {
       return null;
     }
-  }, [action, context, entryTime, moodLabel, moodValue, timezoneOffsetMinutes]);
+  }, [action, context, entryTime, ratingLabel, ratingValue, timezoneOffsetMinutes]);
 
   const activate = useCallback(async () => {
     if (!recordingId || !draftId || !sourceVersion || !candidate || !reviewedSettings) return;
     setBusy(true);
     setError(null);
     try {
-      const review = await reviewMoodCandidate({
+      const review = await reviewRatingCandidate({
         recordingId,
         candidateId: candidate.id,
         draftId,
@@ -345,6 +349,7 @@ export function RecordMoodActionCard({
         settings: reviewedSettings,
       });
       if (!review.action) throw new Error('The activated Action was not returned.');
+      const activatedPresentation = getRatingMetricPresentation(review.action.metric);
       const linkedExisting = review.disposition === 'linked_existing';
       setAction(review.action);
       setExistingAction(null);
@@ -352,8 +357,8 @@ export function RecordMoodActionCard({
       setRejected(false);
       setNotice(
         linkedExisting
-          ? 'This session now uses your existing mood Action.'
-          : 'Record mood Action activated.',
+          ? `This session now uses your existing ${activatedPresentation.checkInTitle.toLowerCase()} Action.`
+          : `${activatedPresentation.checkInTitle} Action activated.`,
       );
       onSessionStateChange?.(linkedExisting ? 'linked_existing' : 'active');
     } catch (activationError) {
@@ -416,7 +421,7 @@ export function RecordMoodActionCard({
     setBusy(true);
     setError(null);
     try {
-      await reviewMoodCandidate({
+      await reviewRatingCandidate({
         recordingId,
         candidateId: candidate.id,
         draftId,
@@ -441,7 +446,7 @@ export function RecordMoodActionCard({
     setBusy(true);
     setError(null);
     try {
-      const saved = await saveMoodEntryDraft({
+      const saved = await saveRatingEntryDraft({
         actionId: action.id,
         entryId,
         values,
@@ -459,29 +464,29 @@ export function RecordMoodActionCard({
 
   const confirm = useCallback(async () => {
     if (!action || !values) return;
-    if (values.mood_value === null && values.mood_label === null && values.context === null) {
-      setError('Enter a mood rating or label before saving.');
+    if (values.rating_value === null && values.rating_label === null && values.context === null) {
+      setError('Enter a rating or label before saving.');
       return;
     }
     setBusy(true);
     setError(null);
     try {
       if (editingConfirmed && entryRevision !== null) {
-        await amendMoodEntry({
+        await amendRatingEntry({
           actionId: action.id,
           entryId,
           values,
           expectedRevision: entryRevision,
         });
-        setNotice('Mood entry corrected.');
+        setNotice('Rating entry corrected.');
       } else {
-        await confirmMoodEntry({
+        await confirmRatingEntry({
           actionId: action.id,
           entryId,
           values,
           expectedRevision: entryRevision,
         });
-        setNotice('Mood entry saved.');
+        setNotice('Rating entry saved.');
       }
       resetForm();
       await refreshEntries(action, true);
@@ -494,8 +499,8 @@ export function RecordMoodActionCard({
 
   const startReview = useCallback(() => {
     if (!values) return;
-    if (values.mood_value === null && values.mood_label === null && values.context === null) {
-      setError('Enter a mood rating or label before reviewing.');
+    if (values.rating_value === null && values.rating_label === null && values.context === null) {
+      setError('Enter a rating or label before reviewing.');
       return;
     }
     setError(null);
@@ -503,9 +508,9 @@ export function RecordMoodActionCard({
   }, [values]);
 
   const removeEntry = useCallback(
-    (entry: MoodEntry) => {
+    (entry: RatingEntry) => {
       if (!action) return;
-      Alert.alert('Delete mood entry?', 'This removes the selected entry.', [
+      Alert.alert('Delete rating entry?', 'This removes the selected entry.', [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
@@ -514,14 +519,14 @@ export function RecordMoodActionCard({
             void (async () => {
               setBusy(true);
               try {
-                await deleteMoodEntry(action.id, entry.id);
+                await deleteRatingEntry(action.id, entry.id);
                 await refreshEntries(action);
                 if (entry.id === entryId) {
                   resetForm();
                 }
-                setNotice('Mood entry deleted.');
+                setNotice('Rating entry deleted.');
               } catch (deleteError) {
-                setError(messageFrom(deleteError, 'The mood entry could not be deleted.'));
+                setError(messageFrom(deleteError, 'The rating entry could not be deleted.'));
               } finally {
                 setBusy(false);
               }
@@ -547,9 +552,9 @@ export function RecordMoodActionCard({
     setBusy(true);
     setError(null);
     try {
-      const payload = await exportMoodEntries(action.id, [...selectedEntryIds]);
-      await shareMoodExport(payload);
-      setNotice('Selected mood entries exported.');
+      const payload = await exportRatingEntries(action.id, [...selectedEntryIds]);
+      await shareRatingExport(payload);
+      setNotice('Selected rating entries exported.');
     } catch (exportError) {
       setError(messageFrom(exportError, 'The selected entries could not be exported.'));
     } finally {
@@ -576,7 +581,7 @@ export function RecordMoodActionCard({
     return (
       <View style={styles.candidateCard}>
         <View style={styles.titleRow}>
-          <Text style={styles.candidateTitle}>Track your mood daily</Text>
+          <Text style={styles.candidateTitle}>{presentation.checkInTitle}</Text>
           <Text style={[styles.candidateBadge, hasConflict && styles.conflictBadge]}>
             {hasConflict ? 'NEEDS ATTENTION' : 'ALREADY ACTIVE'}
           </Text>
@@ -584,8 +589,8 @@ export function RecordMoodActionCard({
         <Text style={styles.taskText}>{candidate.exact_task}</Text>
         <Text style={styles.supportingText}>
           {hasConflict
-            ? 'An ongoing mood Action already exists with different tracking settings. Moodi will not create another one or change the existing Action.'
-            : 'An ongoing mood Action from an earlier session already covers this task. You can link this session without creating another Action.'}
+            ? `An ongoing ${presentation.checkInTitle.toLowerCase()} Action already exists with different tracking settings. Moodi will not create another one or change the existing Action.`
+            : `An ongoing ${presentation.checkInTitle.toLowerCase()} Action from an earlier session already covers this task. You can link this session without creating another Action.`}
         </Text>
         <View style={styles.scheduleReviewBox}>
           <Text style={styles.scheduleTitle}>Existing Action</Text>
@@ -635,7 +640,7 @@ export function RecordMoodActionCard({
     if (rejected) {
       return (
         <View style={styles.candidateCard}>
-          <Text style={styles.candidateTitle}>Mood check-ins not added</Text>
+          <Text style={styles.candidateTitle}>{presentation.checkInTitle} not added</Text>
           <Text style={styles.supportingText}>
             You marked this as something that was not agreed in the session.
           </Text>
@@ -649,7 +654,7 @@ export function RecordMoodActionCard({
     return (
       <View style={styles.candidateCard}>
         <View style={styles.titleRow}>
-          <Text style={styles.candidateTitle}>Track your mood daily</Text>
+          <Text style={styles.candidateTitle}>{presentation.checkInTitle}</Text>
           <Text style={styles.candidateBadge}>
             NEEDS SETUP
           </Text>
@@ -668,7 +673,7 @@ export function RecordMoodActionCard({
             </Text>
             {candidate.configuration.scale_origin === 'moodi_default' ? (
               <Text style={styles.supportingText}>
-                Moodi default for Record mood: overall mood 0–10, once each evening for 14 days.
+                Moodi default for {metricLabel.toLowerCase()}: 0–10, once each evening for 14 days.
                 You can edit the check-in schedule before activating.
               </Text>
             ) : (
@@ -694,21 +699,59 @@ export function RecordMoodActionCard({
               <View style={styles.scheduleEditor}>
                 <Text style={styles.fieldLabel}>Check-in time</Text>
                 <Pressable
+                  accessibilityHint="Opens the time picker"
+                  accessibilityLabel={`Check-in time, ${formatClockTime(timeString(draftCheckInTime))}`}
                   accessibilityRole="button"
-                  onPress={() => setShowTimePicker((visible) => !visible)}
+                  onPress={() => setShowTimePicker(true)}
                   style={({ pressed }) => [styles.timeButton, pressed && styles.pressed]}>
                   <Text style={styles.timeButtonText}>
                     {formatClockTime(timeString(draftCheckInTime))}
                   </Text>
+                  <Text style={styles.timeButtonAction}>
+                    {showTimePicker ? 'Selecting…' : 'Change'}
+                  </Text>
                 </Pressable>
-                {showTimePicker ? (
+
+                {showTimePicker && Platform.OS === 'ios' ? (
+                  <View style={styles.timePickerPanel}>
+                    <View style={styles.timePickerHeader}>
+                      <Text style={styles.timePickerTitle}>Select check-in time</Text>
+                      <Pressable
+                        accessibilityLabel="Confirm check-in time"
+                        accessibilityRole="button"
+                        onPress={() => setShowTimePicker(false)}
+                        style={({ pressed }) => [
+                          styles.timePickerDoneButton,
+                          pressed && styles.pressed,
+                        ]}>
+                        <Text style={styles.timePickerDoneText}>Done</Text>
+                      </Pressable>
+                    </View>
+                    <DateTimePicker
+                      accentColor={colors.accentDark}
+                      display="spinner"
+                      mode="time"
+                      minuteInterval={5}
+                      onValueChange={(_event, selectedTime) =>
+                        setDraftCheckInTime(selectedTime)
+                      }
+                      style={styles.timePicker}
+                      textColor={colors.ink}
+                      themeVariant="light"
+                      value={draftCheckInTime}
+                    />
+                  </View>
+                ) : null}
+
+                {showTimePicker && Platform.OS !== 'ios' ? (
                   <DateTimePicker
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    display="default"
                     mode="time"
                     minuteInterval={5}
-                    onChange={(_event, selectedTime) => {
-                      if (Platform.OS === 'android') setShowTimePicker(false);
-                      if (selectedTime) setDraftCheckInTime(selectedTime);
+                    onDismiss={() => setShowTimePicker(false)}
+                    onValueChange={(_event, selectedTime) => {
+                      setDraftCheckInTime(selectedTime);
+                      setShowTimePicker(false);
                     }}
                     value={draftCheckInTime}
                   />
@@ -847,8 +890,8 @@ export function RecordMoodActionCard({
           <Text style={styles.activatedMark}>✓</Text>
           <Text style={styles.candidateTitle}>
             {resolutionStatus === 'linked_existing'
-              ? 'Using existing mood Action'
-              : 'Record mood activated'}
+              ? `Using existing ${presentation.checkInTitle.toLowerCase()} Action`
+              : `${presentation.checkInTitle} activated`}
           </Text>
         </View>
         <Text style={styles.metaText}>{formatActionCadence(action.settings)}</Text>
@@ -873,7 +916,7 @@ export function RecordMoodActionCard({
   return (
     <View style={styles.actionCard}>
       <View style={styles.titleRow}>
-        <Text style={styles.candidateTitle}>Record mood</Text>
+        <Text style={styles.candidateTitle}>{presentation.checkInTitle}</Text>
         <Text style={[styles.activeBadge, progress.completed && styles.completedBadge]}>
           {progress.completed ? 'COMPLETED' : 'ACTIVE'}
         </Text>
@@ -906,9 +949,9 @@ export function RecordMoodActionCard({
         <View style={styles.completedMessage}>
           <Text style={styles.composerTitle}>Today recorded</Text>
           <Text style={styles.reviewValue}>
-            {todayEntry.values.mood_value !== null
-              ? `Overall mood: ${todayEntry.values.mood_value}/10`
-              : `Mood: ${todayEntry.values.mood_label ?? 'Not supplied'}`}
+            {todayEntry.values.rating_value !== null
+              ? `${metricLabel}: ${todayEntry.values.rating_value}/10`
+              : `${metricLabel}: ${todayEntry.values.rating_label ?? 'Not supplied'}`}
           </Text>
           {todayEntry.values.context ? (
             <Text style={styles.reviewContext}>{todayEntry.values.context}</Text>
@@ -924,7 +967,7 @@ export function RecordMoodActionCard({
       ) : (
         <View style={styles.composer}>
         <Text style={styles.composerTitle}>
-          {editingConfirmed ? 'Correct mood entry' : entryRevision ? 'Resume draft' : 'Today'}
+          {editingConfirmed ? 'Correct rating entry' : entryRevision ? 'Resume draft' : presentation.question}
         </Text>
         <Text style={styles.dateText}>{formatEntryDate(entryTime)}</Text>
 
@@ -938,20 +981,20 @@ export function RecordMoodActionCard({
               {Array.from({ length: 11 }, (_, score) => (
                 <Pressable
                   key={score}
-                  accessibilityLabel={`Mood rating ${score}`}
+                  accessibilityLabel={`${presentation.accessibilityLabel} ${score}`}
                   accessibilityRole="button"
-                  accessibilityState={{ selected: moodValue === score }}
+                  accessibilityState={{ selected: ratingValue === score }}
                   disabled={reviewing}
-                  onPress={() => setMoodValue(score)}
+                  onPress={() => setRatingValue(score)}
                   style={({ pressed }) => [
                     styles.scoreButton,
-                    moodValue === score && styles.scoreButtonSelected,
+                    ratingValue === score && styles.scoreButtonSelected,
                     pressed && styles.pressed,
                   ]}>
                   <Text
                     style={[
                       styles.scoreText,
-                      moodValue === score && styles.scoreTextSelected,
+                      ratingValue === score && styles.scoreTextSelected,
                     ]}>
                     {score}
                   </Text>
@@ -961,13 +1004,13 @@ export function RecordMoodActionCard({
           </>
         ) : (
           <TextInput
-            accessibilityLabel="Mood label"
+            accessibilityLabel={`${presentation.checkInTitle} label`}
             maxLength={120}
-            onChangeText={setMoodLabel}
+            onChangeText={setRatingLabel}
             editable={!reviewing}
-            placeholder="How would you describe your mood?"
+            placeholder="How would you describe this rating?"
             style={styles.input}
-            value={moodLabel}
+            value={ratingLabel}
           />
         )}
 
@@ -990,9 +1033,9 @@ export function RecordMoodActionCard({
           <View style={styles.reviewBox}>
             <Text style={styles.reviewTitle}>Review before saving</Text>
             <Text style={styles.reviewValue}>
-              {values.mood_value !== null
-                ? `Overall mood: ${values.mood_value}/10`
-                : `Mood: ${values.mood_label ?? 'Not supplied'}`}
+              {values.rating_value !== null
+                ? `${metricLabel}: ${values.rating_value}/10`
+                : `${metricLabel}: ${values.rating_label ?? 'Not supplied'}`}
             </Text>
             {values.context ? <Text style={styles.reviewContext}>{values.context}</Text> : null}
             <Text style={styles.historyMeta}>{formatEntryDate(values.entry_time)}</Text>
@@ -1071,9 +1114,9 @@ export function RecordMoodActionCard({
             <View key={entry.id} style={styles.historyRow}>
               <View style={styles.historyCopy}>
                 <Text style={styles.historyValue}>
-                  {entry.values.mood_value !== null
-                    ? `${entry.values.mood_value}/10 ${scale ? `(${scale.minimum_label}–${scale.maximum_label})` : ''}`
-                    : entry.values.mood_label ?? 'Text-only entry'}
+                  {entry.values.rating_value !== null
+                    ? `${entry.values.rating_value}/10 ${scale ? `(${scale.minimum_label}–${scale.maximum_label})` : ''}`
+                    : entry.values.rating_label ?? 'Text-only entry'}
                 </Text>
                 <Text style={styles.historyMeta}>
                   {formatEntryDate(entry.values.entry_time)} · {entry.status}
@@ -1145,8 +1188,15 @@ const styles = StyleSheet.create({
   editScheduleButton: { paddingHorizontal: 6, paddingVertical: 4 },
   scheduleEditor: { gap: 9 },
   fieldLabel: { color: colors.ink, fontSize: 12, fontWeight: '800' },
-  timeButton: { alignSelf: 'flex-start', borderColor: colors.line, borderRadius: 10, borderWidth: 1, paddingHorizontal: 13, paddingVertical: 9 },
+  timeButton: { alignItems: 'center', alignSelf: 'stretch', borderColor: colors.line, borderRadius: 10, borderWidth: 1, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 13, paddingVertical: 11 },
+  timeButtonAction: { color: colors.accentDark, fontSize: 12, fontWeight: '800' },
   timeButtonText: { color: colors.ink, fontSize: 15, fontWeight: '800' },
+  timePicker: { alignSelf: 'stretch', height: 180 },
+  timePickerDoneButton: { paddingHorizontal: 6, paddingVertical: 5 },
+  timePickerDoneText: { color: colors.accentDark, fontSize: 13, fontWeight: '800' },
+  timePickerHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  timePickerPanel: { backgroundColor: '#fff', borderColor: colors.line, borderRadius: 10, borderWidth: 1, overflow: 'hidden', paddingHorizontal: 10, paddingTop: 6 },
+  timePickerTitle: { color: colors.ink, fontSize: 12, fontWeight: '800' },
   durationOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   durationOption: { backgroundColor: '#efe9df', borderRadius: 9, paddingHorizontal: 10, paddingVertical: 8 },
   durationOptionSelected: { backgroundColor: colors.accentDark },

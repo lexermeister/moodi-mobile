@@ -9,16 +9,17 @@ import {
   View,
 } from 'react-native';
 
-import type { MoodAction, MoodEntry, MoodEntryValues } from './actionTypes';
+import type { RatingAction, RatingEntry, RatingEntryValues } from './actionTypes';
 import { getActionProgress, getTodayEntry } from './actionStatus';
 import {
   createUuid,
   dayKeyAtCapturedOffset,
-  normalizeMoodContext,
-  parseMoodScore,
-} from './moodDomain';
+  normalizeRatingContext,
+  parseRatingScore,
+} from './ratingDomain';
+import { getRatingMetricPresentation } from './ratingMetrics';
 import { formatActionCadence } from './scheduleFormatting';
-import { useMoodActionDetail } from './useMoodActionDetail';
+import { useRatingActionDetail } from './useRatingActionDetail';
 
 type Props = {
   actionId: string;
@@ -26,23 +27,23 @@ type Props = {
 };
 
 type ComposerProps = {
-  action: MoodAction;
+  action: RatingAction;
   busy: boolean;
-  entry?: MoodEntry;
+  entry?: RatingEntry;
   error: string | null;
   notice: string | null;
   onCancel?: () => void;
   onSaveConfirmed: (
     entryId: string,
-    values: MoodEntryValues,
+    values: RatingEntryValues,
     expectedRevision: number | null,
     editingConfirmed: boolean,
-  ) => Promise<MoodEntry | null>;
+  ) => Promise<RatingEntry | null>;
   onSaveDraft: (
     entryId: string,
-    values: MoodEntryValues,
+    values: RatingEntryValues,
     expectedRevision: number | null,
-  ) => Promise<MoodEntry | null>;
+  ) => Promise<RatingEntry | null>;
   onSaved: () => void;
 };
 
@@ -53,13 +54,13 @@ function formatEntryDate(entryTime: string) {
   }).format(new Date(entryTime));
 }
 
-function entryValue(entry: MoodEntry) {
-  return entry.values.mood_value !== null
-    ? `${entry.values.mood_value}/10`
-    : entry.values.mood_label ?? 'Mood recorded';
+function entryValue(entry: RatingEntry, fallback: string) {
+  return entry.values.rating_value !== null
+    ? `${entry.values.rating_value}/10`
+    : entry.values.rating_label ?? fallback;
 }
 
-function MoodEntryComposer({
+function RatingEntryComposer({
   action,
   busy,
   entry,
@@ -77,46 +78,47 @@ function MoodEntryComposer({
   const [timezoneOffsetMinutes] = useState(
     entry?.values.timezone_offset_minutes ?? -now.getTimezoneOffset(),
   );
-  const [moodValue, setMoodValue] = useState<number | null>(entry?.values.mood_value ?? null);
-  const [moodLabel, setMoodLabel] = useState(entry?.values.mood_label ?? '');
+  const [ratingValue, setRatingValue] = useState<number | null>(entry?.values.rating_value ?? null);
+  const [ratingLabel, setRatingLabel] = useState(entry?.values.rating_label ?? '');
   const [context, setContext] = useState(entry?.values.context ?? '');
   const [noteExpanded, setNoteExpanded] = useState(Boolean(entry?.values.context));
   const configuration = action.settings.configuration;
+  const presentation = getRatingMetricPresentation(action.metric);
   const scale = configuration.scale;
   const editingConfirmed = entry?.status === 'confirmed';
 
-  const values = useMemo((): MoodEntryValues | null => {
+  const values = useMemo((): RatingEntryValues | null => {
     try {
       const dayKey = dayKeyAtCapturedOffset(entryTime, timezoneOffsetMinutes);
       const numericValue =
-        configuration.input_kind === 'numeric_0_10' && moodValue !== null
-          ? parseMoodScore(moodValue)
+        configuration.input_kind === 'numeric_0_10' && ratingValue !== null
+          ? parseRatingScore(ratingValue)
           : null;
       const label =
-        configuration.input_kind === 'label' && moodLabel.trim() ? moodLabel.trim() : null;
+        configuration.input_kind === 'label' && ratingLabel.trim() ? ratingLabel.trim() : null;
       return {
         relevant_date: dayKey,
         entry_time: entryTime,
         timezone_offset_minutes: timezoneOffsetMinutes,
         day_key: dayKey,
-        mood_value: numericValue,
-        mood_label: label,
-        context: configuration.context_enabled ? normalizeMoodContext(context) : null,
+        rating_value: numericValue,
+        rating_label: label,
+        context: configuration.context_enabled ? normalizeRatingContext(context) : null,
         scale_id: numericValue === null ? null : configuration.scale?.id ?? null,
       };
     } catch {
       return null;
     }
-  }, [configuration, context, entryTime, moodLabel, moodValue, timezoneOffsetMinutes]);
+  }, [configuration, context, entryTime, ratingLabel, ratingValue, timezoneOffsetMinutes]);
 
-  const hasMood = Boolean(values && (values.mood_value !== null || values.mood_label !== null));
+  const hasRating = Boolean(values && (values.rating_value !== null || values.rating_label !== null));
 
   return (
     <View style={styles.composer}>
       <View style={styles.composerHeader}>
         <View style={styles.headerCopy}>
           <Text style={styles.composerTitle}>
-            {editingConfirmed ? 'Edit mood entry' : entry ? 'Resume draft' : 'How was today?'}
+            {editingConfirmed ? 'Edit rating entry' : entry ? 'Resume draft' : presentation.checkInTitle}
           </Text>
           <Text style={styles.dateText}>{formatEntryDate(entryTime)}</Text>
         </View>
@@ -133,7 +135,7 @@ function MoodEntryComposer({
 
       {configuration.input_kind === 'numeric_0_10' ? (
         <>
-          <Text style={styles.prompt}>Your overall mood for the whole day</Text>
+          <Text style={styles.prompt}>{presentation.question}</Text>
           <View style={styles.scaleLabels}>
             <Text style={styles.scaleLabel}>{scale?.minimum_label ?? 'Lowest'}</Text>
             <Text style={styles.scaleLabel}>{scale?.maximum_label ?? 'Highest'}</Text>
@@ -142,17 +144,17 @@ function MoodEntryComposer({
             {Array.from({ length: 11 }, (_, score) => (
               <Pressable
                 key={score}
-                accessibilityLabel={`Mood rating ${score}`}
+                accessibilityLabel={`${presentation.accessibilityLabel} ${score}`}
                 accessibilityRole="button"
-                accessibilityState={{ selected: moodValue === score }}
+                accessibilityState={{ selected: ratingValue === score }}
                 disabled={busy}
-                onPress={() => setMoodValue(score)}
+                onPress={() => setRatingValue(score)}
                 style={({ pressed }) => [
                   styles.scoreButton,
-                  moodValue === score && styles.scoreButtonSelected,
+                  ratingValue === score && styles.scoreButtonSelected,
                   pressed && styles.pressed,
                 ]}>
-                <Text style={[styles.scoreText, moodValue === score && styles.scoreTextSelected]}>
+                <Text style={[styles.scoreText, ratingValue === score && styles.scoreTextSelected]}>
                   {score}
                 </Text>
               </Pressable>
@@ -161,13 +163,13 @@ function MoodEntryComposer({
         </>
       ) : (
         <TextInput
-          accessibilityLabel="Mood label"
+          accessibilityLabel={`${presentation.checkInTitle} label`}
           editable={!busy}
           maxLength={120}
-          onChangeText={setMoodLabel}
-          placeholder="How would you describe your mood?"
+          onChangeText={setRatingLabel}
+          placeholder="How would you describe this rating?"
           style={styles.input}
-          value={moodLabel}
+          value={ratingLabel}
         />
       )}
 
@@ -209,7 +211,7 @@ function MoodEntryComposer({
         {!editingConfirmed ? (
           <Pressable
             accessibilityRole="button"
-            disabled={busy || !values || !hasMood}
+            disabled={busy || !values || !hasRating}
             onPress={() => {
               if (!values) return;
               void onSaveDraft(entryId, values, entryRevision).then((saved) => {
@@ -222,7 +224,7 @@ function MoodEntryComposer({
         ) : null}
         <Pressable
           accessibilityRole="button"
-          disabled={busy || !values || !hasMood}
+          disabled={busy || !values || !hasRating}
           onPress={() => {
             if (!values) return;
             void onSaveConfirmed(entryId, values, entryRevision, editingConfirmed).then((saved) => {
@@ -234,7 +236,7 @@ function MoodEntryComposer({
             <ActivityIndicator color="#fff" size="small" />
           ) : (
             <Text style={styles.saveButtonText}>
-              {editingConfirmed ? 'Save changes' : 'Save mood'}
+              {editingConfirmed ? 'Save changes' : 'Save rating'}
             </Text>
           )}
         </Pressable>
@@ -243,9 +245,9 @@ function MoodEntryComposer({
   );
 }
 
-export function MoodTodayScreen({ actionId, entryId }: Props) {
+export function RatingTodayScreen({ actionId, entryId }: Props) {
   const router = useRouter();
-  const detail = useMoodActionDetail(actionId);
+  const detail = useRatingActionDetail(actionId);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(entryId ?? null);
 
   if (detail.loading) {
@@ -254,7 +256,9 @@ export function MoodTodayScreen({ actionId, entryId }: Props) {
   if (!detail.action) {
     return (
       <View style={styles.messageCard}>
-        <Text style={styles.errorText}>{detail.error ?? 'This mood check-in could not be opened.'}</Text>
+        <Text style={styles.errorText}>
+          {detail.error ?? 'This rating check-in could not be opened.'}
+        </Text>
         <Pressable
           accessibilityRole="button"
           onPress={() => void detail.reload()}
@@ -266,6 +270,7 @@ export function MoodTodayScreen({ actionId, entryId }: Props) {
   }
 
   const action = detail.action;
+  const presentation = getRatingMetricPresentation(action.metric);
   const progress = getActionProgress(action);
   const todayEntry = getTodayEntry(detail.entries);
   const targetEntryId = entryId ?? editingEntryId;
@@ -284,7 +289,7 @@ export function MoodTodayScreen({ actionId, entryId }: Props) {
   if (entryId && !selectedEntry) {
     return (
       <View style={styles.messageCard}>
-        <Text style={styles.errorText}>This mood entry could not be found.</Text>
+        <Text style={styles.errorText}>This rating entry could not be found.</Text>
         <Pressable
           accessibilityRole="button"
           onPress={openHistory}
@@ -300,7 +305,7 @@ export function MoodTodayScreen({ actionId, entryId }: Props) {
       <View style={styles.endedCard}>
         <Text style={styles.endedTitle}>This tracking period has ended</Text>
         <Text style={styles.supportingText}>
-          Your saved entries are still available in mood history.
+          Your saved entries are still available in {presentation.historyTitle.toLowerCase()}.
         </Text>
         <Pressable
           accessibilityRole="button"
@@ -317,7 +322,7 @@ export function MoodTodayScreen({ actionId, entryId }: Props) {
       <View style={styles.savedCard}>
         <Text style={styles.savedMark}>✓</Text>
         <Text style={styles.savedTitle}>Saved for today</Text>
-        <Text style={styles.savedValue}>{entryValue(todayEntry)}</Text>
+        <Text style={styles.savedValue}>{entryValue(todayEntry, presentation.entryFallback)}</Text>
         {todayEntry.values.context ? (
           <Text style={styles.supportingText}>{todayEntry.values.context}</Text>
         ) : null}
@@ -348,7 +353,7 @@ export function MoodTodayScreen({ actionId, entryId }: Props) {
   return (
     <View style={styles.screen}>
       <View style={styles.actionMeta}>
-        <Text style={styles.actionTitle}>Mood check-in</Text>
+        <Text style={styles.actionTitle}>{presentation.checkInTitle}</Text>
         <Text style={styles.supportingText}>
           {formatActionCadence(action.settings)} ·{' '}
           {action.settings.duration_kind === 'ongoing'
@@ -357,7 +362,7 @@ export function MoodTodayScreen({ actionId, entryId }: Props) {
         </Text>
       </View>
 
-      <MoodEntryComposer
+      <RatingEntryComposer
         action={action}
         busy={detail.busy}
         entry={composerEntry}
@@ -385,7 +390,7 @@ export function MoodTodayScreen({ actionId, entryId }: Props) {
           accessibilityRole="button"
           onPress={openHistory}
           style={({ pressed }) => [styles.historyLink, pressed && styles.pressed]}>
-          <Text style={styles.historyLinkText}>View mood history</Text>
+          <Text style={styles.historyLinkText}>View {presentation.historyTitle.toLowerCase()}</Text>
           <Text style={styles.chevron}>›</Text>
         </Pressable>
       ) : null}

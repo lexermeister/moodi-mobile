@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AgreedActionsSection } from '../actions/AgreedActionsSection';
-import type { RecordMoodSessionState } from '../actions/RecordMoodActionCard';
+import type { RecordRatingSessionState } from '../actions/RecordRatingActionCard';
 import type { RecordingMetadata } from './recordingStorage';
 import { SessionInsightsEditor } from './SessionInsightsEditor';
 import type { SessionInsightsReviewRequest } from './sessionInsightsReviewTypes';
@@ -21,10 +21,7 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
   const [summaryNotice, setSummaryNotice] = useState<{ draftId: string; message: string } | null>(
     null,
   );
-  const [actionState, setActionState] = useState<{
-    key: string;
-    status: RecordMoodSessionState;
-  } | null>(null);
+  const [actionStates, setActionStates] = useState<Record<string, RecordRatingSessionState>>({});
   const insights = recording.sessionInsights?.result;
   const draftId = recording.sessionInsights?.draft_id;
   const reviewableInsights =
@@ -41,18 +38,25 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
     savedReview.source_version === recording.sessionInsights?.source_version
       ? savedReview
       : undefined;
-  const actionCandidate = insights?.action_candidates[0];
-  const actionStateKey = `${draftId ?? 'no-draft'}:${
-    recording.sessionInsights?.source_version ?? 'no-source'
-  }:${actionCandidate?.id ?? 'no-action'}`;
-  const actionStatus =
-    actionState?.key === actionStateKey ? actionState.status : 'loading';
+  const actionCandidates = insights?.action_candidates ?? [];
+  const actionSourceVersion =
+    recording.sessionInsights?.source_version ?? insights?.source_version ?? 'no-source';
+  const actionStateKey = useCallback(
+    (candidateId: string) => `${draftId ?? 'no-draft'}:${actionSourceVersion}:${candidateId}`,
+    [actionSourceVersion, draftId],
+  );
   const handleActionStatusChange = useCallback(
-    (status: RecordMoodSessionState) => {
-      setActionState({ key: actionStateKey, status });
+    (candidateId: string, status: RecordRatingSessionState) => {
+      const key = actionStateKey(candidateId);
+      setActionStates((current) =>
+        current[key] === status ? current : { ...current, [key]: status },
+      );
     },
     [actionStateKey],
   );
+  const pendingActionStatuses = actionCandidates
+    .map((candidate) => actionStates[actionStateKey(candidate.id)] ?? 'loading')
+    .filter((status) => status === 'needs_setup' || status === 'already_active');
   const displayedSections = useMemo(
     () =>
       review
@@ -107,14 +111,10 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
                   await onSaveReview(recording, request);
                   setEditing(false);
                   setSummaryNotice(
-                    actionCandidate &&
-                      (actionStatus === 'needs_setup' || actionStatus === 'already_active')
+                    pendingActionStatuses.length
                       ? {
                           draftId: reviewableInsights.draft_id,
-                          message:
-                            actionStatus === 'already_active'
-                              ? 'Session summary reviewed. One agreed action can use your existing mood check-in.'
-                              : 'Session summary reviewed. One agreed action still needs your review.',
+                          message: `Session summary reviewed. ${pendingActionStatuses.length} agreed ${pendingActionStatuses.length === 1 ? 'action still needs' : 'actions still need'} your review.`,
                         }
                       : null,
                   );
@@ -199,16 +199,16 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
             )}
           </View>
 
-          {actionCandidate ? (
+          {actionCandidates.map((candidate) => (
             <AgreedActionsSection
-              candidate={actionCandidate}
+              candidate={candidate}
               draftId={draftId}
-              key={`${recording.id}:${recording.sessionInsights?.source_version ?? insights.source_version}:${actionCandidate.id}`}
+              key={`${recording.id}:${actionSourceVersion}:${candidate.id}`}
               onStatusChange={handleActionStatusChange}
               recordingId={recording.backendRecordingId}
-              sourceVersion={recording.sessionInsights?.source_version ?? insights.source_version}
+              sourceVersion={actionSourceVersion}
             />
-          ) : null}
+          ))}
         </>
       ) : null}
 

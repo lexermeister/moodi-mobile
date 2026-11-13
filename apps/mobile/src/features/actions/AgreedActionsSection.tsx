@@ -1,21 +1,21 @@
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { RecordMoodCandidate } from './actionTypes';
+import type { RecordRatingCandidate } from './actionTypes';
 import {
-  RecordMoodActionCard,
-  type RecordMoodSessionState,
-} from './RecordMoodActionCard';
+  RecordRatingActionCard,
+  type RecordRatingSessionState,
+} from './RecordRatingActionCard';
 
 type Props = {
-  candidate: RecordMoodCandidate;
+  candidate: RecordRatingCandidate;
   draftId?: string;
-  onStatusChange?: (status: RecordMoodSessionState) => void;
+  onStatusChange?: (candidateId: string, status: RecordRatingSessionState) => void;
   recordingId?: string;
   sourceVersion?: string;
 };
 
-const statusLabels: Record<RecordMoodSessionState, string> = {
+const statusLabels: Record<RecordRatingSessionState, string> = {
   active: 'ACTIVE',
   already_active: 'ALREADY ACTIVE',
   conflict: 'NEEDS ATTENTION',
@@ -33,14 +33,14 @@ export function AgreedActionsSection({
   recordingId,
   sourceVersion,
 }: Props) {
-  const [status, setStatus] = useState<RecordMoodSessionState>('loading');
+  const [status, setStatus] = useState<RecordRatingSessionState>('loading');
 
   const updateStatus = useCallback(
-    (nextStatus: RecordMoodSessionState) => {
-      setStatus(nextStatus);
-      onStatusChange?.(nextStatus);
+    (nextStatus: RecordRatingSessionState) => {
+      setStatus((current) => (current === nextStatus ? current : nextStatus));
+      onStatusChange?.(candidate.id, nextStatus);
     },
-    [onStatusChange],
+    [candidate.id, onStatusChange],
   );
 
   return (
@@ -74,7 +74,7 @@ export function AgreedActionsSection({
         should support this agreed task.
       </Text>
 
-      <RecordMoodActionCard
+      <RecordRatingActionCard
         candidate={candidate}
         compactWhenActive
         draftId={draftId}

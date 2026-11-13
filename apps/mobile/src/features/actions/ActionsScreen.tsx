@@ -11,18 +11,19 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { listMoodActions, listMoodEntries } from './actionsApi';
+import { listRatingActions, listRatingEntries } from './actionsApi';
 import {
   formatActionDate,
   getActionProgress,
   getTodayEntry,
 } from './actionStatus';
-import type { MoodAction, MoodEntry } from './actionTypes';
+import type { RatingAction, RatingEntry } from './actionTypes';
+import { getRatingMetricPresentation } from './ratingMetrics';
 import { formatActionCadence } from './scheduleFormatting';
 
 type ActionOverview = {
-  action: MoodAction;
-  entries: MoodEntry[];
+  action: RatingAction;
+  entries: RatingEntry[];
 };
 
 function messageFrom(error: unknown) {
@@ -31,14 +32,15 @@ function messageFrom(error: unknown) {
     : 'Actions could not be loaded.';
 }
 
-function entryValue(entry: MoodEntry) {
-  return entry.values.mood_value !== null
-    ? `${entry.values.mood_value}/10`
-    : entry.values.mood_label ?? 'Saved';
+function entryValue(entry: RatingEntry) {
+  return entry.values.rating_value !== null
+    ? `${entry.values.rating_value}/10`
+    : entry.values.rating_label ?? 'Saved';
 }
 
 function TodayActionCard({ overview }: { overview: ActionOverview }) {
   const router = useRouter();
+  const presentation = getRatingMetricPresentation(overview.action.metric);
   const progress = getActionProgress(overview.action);
   const todayEntry = getTodayEntry(overview.entries);
   const callToAction = todayEntry?.status === 'confirmed'
@@ -47,14 +49,14 @@ function TodayActionCard({ overview }: { overview: ActionOverview }) {
       ? 'Resume'
       : 'Check in';
   const todayStatus = todayEntry?.status === 'confirmed'
-    ? `Mood recorded · ${entryValue(todayEntry)}`
+    ? `${presentation.entryFallback} · ${entryValue(todayEntry)}`
     : todayEntry?.status === 'draft'
       ? 'Draft saved'
       : 'Ready when you are';
 
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>Mood check-in</Text>
+      <Text style={styles.cardTitle}>{presentation.checkInTitle}</Text>
       <Text style={styles.schedule}>{formatActionCadence(overview.action.settings)}</Text>
       <Text style={styles.todayStatus}>{todayStatus}</Text>
       <Text style={styles.progressText}>
@@ -79,13 +81,14 @@ function TodayActionCard({ overview }: { overview: ActionOverview }) {
 
 function PastActionCard({ overview }: { overview: ActionOverview }) {
   const router = useRouter();
+  const presentation = getRatingMetricPresentation(overview.action.metric);
   const progress = getActionProgress(overview.action);
   const confirmedCount = overview.entries.filter((entry) => entry.status === 'confirmed').length;
 
   return (
     <View style={styles.pastCard}>
       <View style={styles.pastCopy}>
-        <Text style={styles.pastTitle}>Track your mood</Text>
+        <Text style={styles.pastTitle}>{presentation.checkInTitle}</Text>
         <Text style={styles.pastMeta}>
           {confirmedCount} {confirmedCount === 1 ? 'entry' : 'entries'}
           {progress.endDate ? ` · Ended ${formatActionDate(progress.endDate)}` : ' · Ended'}
@@ -118,11 +121,11 @@ export function ActionsScreen() {
     else setLoading(true);
     setError(null);
     try {
-      const actions = await listMoodActions();
+      const actions = await listRatingActions();
       const loaded = await Promise.all(
         actions.map(async (action) => ({
           action,
-          entries: await listMoodEntries(action.id),
+          entries: await listRatingEntries(action.id),
         })),
       );
       setOverviews(loaded);
