@@ -3,6 +3,7 @@ import { useFocusEffect } from 'expo-router';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '@/ui/theme';
+import { MoodiWave } from '@/ui/MoodiWave';
 import { listRatingActions, listRatingEntries } from './actionsApi';
 import { currentDayKey } from './actionStatus';
 import type { RatingEntry } from './actionTypes';
@@ -27,7 +28,7 @@ export function MoodEntryDetail({ entry, onClose }: { entry: RatingEntry; onClos
         <Text style={styles.sheetSubtitle}>Your saved check-in</Text>
         <ScrollView contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator>
           <View style={styles.detailCard}>
-            <View style={styles.moodHeader}><View style={styles.moodIcon}><Text style={styles.moodIconText}>∿</Text></View>
+            <View style={styles.moodHeader}><View style={styles.moodIcon}><MoodiWave width={22} /></View>
               <Text style={styles.moodTitle}>Whole-day mood</Text><Score value={values.mood_value ?? 0} /></View>
             <View style={styles.dateRow}><Text style={styles.dateText}>{entryTimeLabel(entry)}</Text>
               <Text style={styles.zoneText}>{entryOffsetLabel(entry)}</Text></View>
@@ -104,7 +105,7 @@ const styles = StyleSheet.create({
   detailCard: { padding: 14, borderRadius: 16, borderWidth: 1, borderColor: '#4A4655', backgroundColor: '#2E2B36' },
   moodHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingBottom: 14 },
   moodIcon: { width: 40, height: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#403954' },
-  moodIconText: { fontSize: 25, color: '#C9B7FF' }, moodTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
+  moodTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
   dateRow: { borderTopWidth: 1, borderTopColor: '#514D5A', paddingVertical: 12, gap: 4 },
   dateText: { color: '#DDD9E5', fontSize: 13, fontWeight: '700' }, zoneText: { color: '#C7C2D0', fontSize: 12 },
   detailRow: { borderTopWidth: 1, borderTopColor: '#514D5A', flexDirection: 'row', gap: 12, paddingVertical: 11 },

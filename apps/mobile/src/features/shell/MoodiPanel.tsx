@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Button } from '@/ui/components';
 import { theme } from '@/ui/theme';
+import { MoodiWave } from '@/ui/MoodiWave';
 import { useSharedRecordingLibrary } from '../recordings/RecordingLibraryProvider';
 import { formatDuration } from '../journey/sessionPresentation';
 
@@ -59,7 +60,7 @@ export function MoodiPanel() {
     </View> : null}
     <Pressable accessibilityRole="button" accessibilityLabel={open ? 'Minimize Moodi' : active ? 'Open recording controls' : 'Ask Moodi'}
       accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)} style={styles.launcher}>
-      <Text style={styles.symbol}>{library.isRecording ? '●' : '∿'}</Text>
+      {library.isRecording ? <Text style={styles.recordingDot}>●</Text> : <MoodiWave />}
     </Pressable>
   </View>;
 }
@@ -73,6 +74,8 @@ const styles = StyleSheet.create({
   title: { color: theme.colors.panelText, fontSize: 25, fontWeight: '700', letterSpacing: -0.5 },
   copy: { color: theme.colors.panelMuted, fontSize: 15, lineHeight: 23 },
   timer: { color: theme.colors.panelText, fontSize: 32, fontVariant: ['tabular-nums'] },
-  launcher: { width: 56, height: 56, borderRadius: 18, backgroundColor: theme.colors.lavender, alignItems: 'center', justifyContent: 'center' },
-  symbol: { color: theme.colors.accent, fontSize: 32, fontWeight: '700' },
+  launcher: { width: 54, height: 54, borderRadius: 19, backgroundColor: theme.colors.panel,
+    alignItems: 'center', justifyContent: 'center', shadowColor: '#19151F', shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22, shadowRadius: 12, elevation: 7 },
+  recordingDot: { color: '#D7C8FF', fontSize: 25, lineHeight: 30, includeFontPadding: false },
 });

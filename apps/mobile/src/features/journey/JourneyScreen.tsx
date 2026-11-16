@@ -2,6 +2,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Page, typography } from '@/ui/components';
 import { theme } from '@/ui/theme';
+import { MoodiWave } from '@/ui/MoodiWave';
 import { useCallback, useState } from 'react';
 import { listRatingActions, listRatingEntries } from '../actions/actionsApi';
 import type { RatingEntry } from '../actions/actionTypes';
@@ -27,7 +28,7 @@ function CompletedActions({ period, entries, onSelect, initiallyOpen = false }: 
     {open ? entries.length ? entries.map(entry => <Pressable key={entry.id} accessibilityRole="button"
       accessibilityLabel={`Mood check-in, ${entry.values.mood_value} out of 10, ${entryTimeLabel(entry)}`}
       onPress={() => onSelect(entry)} style={({ pressed }) => [styles.actionRow, pressed && { opacity: 0.6 }]}>
-      <View style={styles.moodIcon}><Text style={styles.moodSymbol}>∿</Text></View>
+      <View style={styles.moodIcon}><MoodiWave color={theme.colors.accent} width={20} /></View>
       <View style={styles.copy}><Text style={styles.actionName}>Mood check-in</Text>
         <Text style={styles.period}>{entryTimeLabel(entry)}</Text></View>
       <Text style={styles.actionScore}>{entry.values.mood_value}<Text style={styles.actionOutOf}>/10</Text></Text>
@@ -124,7 +125,7 @@ const styles = StyleSheet.create({
   count: { minWidth: 24, textAlign: 'center', color: theme.colors.muted, backgroundColor: '#F0EFF4', borderRadius: 12, overflow: 'hidden', fontSize: 12, fontWeight: '700', padding: 3 },
   actionRow: { marginLeft: 18, marginTop: 4, padding: 8, borderRadius: 11, borderWidth: 1, borderColor: theme.colors.line, backgroundColor: '#F8F7FB', flexDirection: 'row', gap: 8, alignItems: 'center', minHeight: 46 },
   moodIcon: { width: 30, height: 30, borderRadius: 8, backgroundColor: '#EDE7FF', alignItems: 'center', justifyContent: 'center' },
-  moodSymbol: { color: theme.colors.accent, fontSize: 20 }, actionName: { color: theme.colors.ink, fontSize: 13, fontWeight: '700' },
+  actionName: { color: theme.colors.ink, fontSize: 13, fontWeight: '700' },
   actionScore: { color: theme.colors.accent, fontSize: 14, fontWeight: '800' }, actionOutOf: { fontSize: 11, fontWeight: '500' },
   status: { color: theme.colors.accent, fontSize: 13, fontWeight: '600' }, arrow: { fontSize: 28, color: theme.colors.muted },
 });
