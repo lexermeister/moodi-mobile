@@ -16,7 +16,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   return <View style={styles.detailRow}><Text style={styles.detailLabel}>{label}</Text><Text style={styles.detailValue}>{value}</Text></View>;
 }
 
-function MoodEntryDetail({ entry, onClose }: { entry: RatingEntry; onClose: () => void }) {
+export function MoodEntryDetail({ entry, onClose }: { entry: RatingEntry; onClose: () => void }) {
   const values = entry.values;
   const feeling = entryFeeling(entry);
   return <Modal visible transparent animationType="fade" onRequestClose={onClose}>
