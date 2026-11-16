@@ -8,6 +8,7 @@ import type { RatingAction, RatingEntry } from './actionTypes';
 import { measurementLabels } from './moodSetup';
 import { latestMoodDraft } from './moodWizardDomain';
 import { MoodEntryWizard } from './MoodEntryWizard';
+import { confirmedMoodEntries } from './moodEntryPresentation';
 
 export function TodayMoodActions({ onEntriesChanged }: { onEntriesChanged?: () => void }) {
   const router = useRouter();
@@ -23,8 +24,12 @@ export function TodayMoodActions({ onEntriesChanged }: { onEntriesChanged?: () =
     try {
       const actions = (await listRatingActions()).filter(action => action.state === 'active' &&
         !getActionProgress(action).completed && (!action.settings.start_date || action.settings.start_date <= currentDayKey()));
-      const rows = await Promise.all(actions.map(async action => ({ action, draft: latestMoodDraft(await listRatingEntries(action.id)) })));
-      if (request.current === version) { setItems(rows); setError(null); }
+      const today = currentDayKey();
+      const rows = await Promise.all(actions.map(async action => {
+        const entries = await listRatingEntries(action.id);
+        return { action, draft: latestMoodDraft(entries), completedToday: confirmedMoodEntries(entries, today).length > 0 };
+      }));
+      if (request.current === version) { setItems(rows.filter(row => !row.completedToday)); setError(null); }
     } catch (cause) {
       if (request.current === version) setError(cause instanceof Error ? cause.message : 'Could not load your actions.');
     } finally { if (request.current === version) setLoading(false); }
@@ -37,7 +42,9 @@ export function TodayMoodActions({ onEntriesChanged }: { onEntriesChanged?: () =
     }
     opening.current = true;
     try {
-      const draft = latestMoodDraft(await listRatingEntries(action.id));
+      const entries = await listRatingEntries(action.id);
+      if (confirmedMoodEntries(entries, currentDayKey()).length) { void refresh(); onEntriesChanged?.(); return; }
+      const draft = latestMoodDraft(entries);
       setSession({ action, draft });
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not open this check-in.'); }
     finally { opening.current = false; }

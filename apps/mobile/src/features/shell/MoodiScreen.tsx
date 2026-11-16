@@ -5,6 +5,7 @@ import { useSharedRecordingLibrary } from '../recordings/RecordingLibraryProvide
 import { useMoodiPanel } from './MoodiPanel';
 import { RecentMoodChart } from './RecentMoodChart';
 import { TodayMoodActions } from '../actions/TodayMoodActions';
+import { MoodEntriesSection } from '../actions/MoodEntriesSection';
 
 export function MoodiScreen() {
   const [entryVersion, setEntryVersion] = useState(0);
@@ -19,5 +20,6 @@ export function MoodiScreen() {
       <Text style={typography.body}>{library.isRecording ? 'Open Moodi to see your recording.' : 'When you’re ready, open Moodi to record a session.'}</Text>
       <Button label={library.isRecording ? 'Open recording' : 'Open Moodi'} onPress={() => setOpen(true)} /></Card>
     <RecentMoodChart key={entryVersion} />
+    <MoodEntriesSection refreshKey={entryVersion} />
   </Page>;
 }
