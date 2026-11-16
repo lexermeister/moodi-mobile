@@ -55,9 +55,9 @@ function formatEntryDate(entryTime: string) {
 }
 
 function entryValue(entry: RatingEntry, fallback: string) {
-  return entry.values.rating_value !== null
-    ? `${entry.values.rating_value}/10`
-    : entry.values.rating_label ?? fallback;
+  return entry.values.mood_value !== null
+    ? `${entry.values.mood_value}/10`
+    : entry.values.mood_label ?? fallback;
 }
 
 function RatingEntryComposer({
@@ -78,12 +78,12 @@ function RatingEntryComposer({
   const [timezoneOffsetMinutes] = useState(
     entry?.values.timezone_offset_minutes ?? -now.getTimezoneOffset(),
   );
-  const [ratingValue, setRatingValue] = useState<number | null>(entry?.values.rating_value ?? null);
-  const [ratingLabel, setRatingLabel] = useState(entry?.values.rating_label ?? '');
+  const [ratingValue, setRatingValue] = useState<number | null>(entry?.values.mood_value ?? null);
+  const [ratingLabel, setRatingLabel] = useState(entry?.values.mood_label ?? '');
   const [context, setContext] = useState(entry?.values.context ?? '');
   const [noteExpanded, setNoteExpanded] = useState(Boolean(entry?.values.context));
   const configuration = action.settings.configuration;
-  const presentation = getRatingMetricPresentation(action.metric);
+  const presentation = getRatingMetricPresentation('mood');
   const scale = configuration.scale;
   const editingConfirmed = entry?.status === 'confirmed';
 
@@ -97,21 +97,22 @@ function RatingEntryComposer({
       const label =
         configuration.input_kind === 'label' && ratingLabel.trim() ? ratingLabel.trim() : null;
       return {
+        ...entry?.values,
         relevant_date: dayKey,
         entry_time: entryTime,
         timezone_offset_minutes: timezoneOffsetMinutes,
         day_key: dayKey,
-        rating_value: numericValue,
-        rating_label: label,
-        context: configuration.context_enabled ? normalizeRatingContext(context) : null,
+        mood_value: numericValue,
+        mood_label: label,
+        context: normalizeRatingContext(context),
         scale_id: numericValue === null ? null : configuration.scale?.id ?? null,
       };
     } catch {
       return null;
     }
-  }, [configuration, context, entryTime, ratingLabel, ratingValue, timezoneOffsetMinutes]);
+  }, [configuration, context, entry?.values, entryTime, ratingLabel, ratingValue, timezoneOffsetMinutes]);
 
-  const hasRating = Boolean(values && (values.rating_value !== null || values.rating_label !== null));
+  const hasRating = Boolean(values && (values.mood_value !== null || values.mood_label !== null));
 
   return (
     <View style={styles.composer}>
@@ -270,7 +271,7 @@ export function RatingTodayScreen({ actionId, entryId }: Props) {
   }
 
   const action = detail.action;
-  const presentation = getRatingMetricPresentation(action.metric);
+  const presentation = getRatingMetricPresentation('mood');
   const progress = getActionProgress(action);
   const todayEntry = getTodayEntry(detail.entries);
   const targetEntryId = entryId ?? editingEntryId;
@@ -355,10 +356,10 @@ export function RatingTodayScreen({ actionId, entryId }: Props) {
       <View style={styles.actionMeta}>
         <Text style={styles.actionTitle}>{presentation.checkInTitle}</Text>
         <Text style={styles.supportingText}>
-          {formatActionCadence(action.settings)} ·{' '}
-          {action.settings.duration_kind === 'ongoing'
-            ? `Day ${progress.dayNumber}`
-            : `Day ${progress.dayNumber} of ${action.settings.duration_days}`}
+          {formatActionCadence(action.settings)}
+          {action.settings.duration_kind === 'unscheduled' ? '' : action.settings.duration_kind === 'ongoing'
+            ? ` · Day ${progress.dayNumber}`
+            : ` · Day ${progress.dayNumber} of ${action.settings.duration_days}`}
         </Text>
       </View>
 

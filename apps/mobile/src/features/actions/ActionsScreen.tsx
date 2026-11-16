@@ -33,14 +33,14 @@ function messageFrom(error: unknown) {
 }
 
 function entryValue(entry: RatingEntry) {
-  return entry.values.rating_value !== null
-    ? `${entry.values.rating_value}/10`
-    : entry.values.rating_label ?? 'Saved';
+  return entry.values.mood_value !== null
+    ? `${entry.values.mood_value}/10`
+    : entry.values.mood_label ?? 'Saved';
 }
 
 function TodayActionCard({ overview }: { overview: ActionOverview }) {
   const router = useRouter();
-  const presentation = getRatingMetricPresentation(overview.action.metric);
+  const presentation = getRatingMetricPresentation('mood');
   const progress = getActionProgress(overview.action);
   const todayEntry = getTodayEntry(overview.entries);
   const callToAction = todayEntry?.status === 'confirmed'
@@ -59,11 +59,11 @@ function TodayActionCard({ overview }: { overview: ActionOverview }) {
       <Text style={styles.cardTitle}>{presentation.checkInTitle}</Text>
       <Text style={styles.schedule}>{formatActionCadence(overview.action.settings)}</Text>
       <Text style={styles.todayStatus}>{todayStatus}</Text>
-      <Text style={styles.progressText}>
+      {overview.action.settings.duration_kind !== 'unscheduled' ? <Text style={styles.progressText}>
         {overview.action.settings.duration_kind === 'ongoing'
           ? `Day ${progress.dayNumber}`
           : `Day ${progress.dayNumber} of ${overview.action.settings.duration_days}`}
-      </Text>
+      </Text> : null}
       <Pressable
         accessibilityRole="button"
         onPress={() =>
@@ -81,7 +81,7 @@ function TodayActionCard({ overview }: { overview: ActionOverview }) {
 
 function PastActionCard({ overview }: { overview: ActionOverview }) {
   const router = useRouter();
-  const presentation = getRatingMetricPresentation(overview.action.metric);
+  const presentation = getRatingMetricPresentation('mood');
   const progress = getActionProgress(overview.action);
   const confirmedCount = overview.entries.filter((entry) => entry.status === 'confirmed').length;
 

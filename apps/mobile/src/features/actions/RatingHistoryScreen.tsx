@@ -41,9 +41,9 @@ function formatEntryDate(entry: RatingEntry) {
 }
 
 function entryValue(entry: RatingEntry) {
-  return entry.values.rating_value !== null
-    ? `${entry.values.rating_value}/10`
-    : entry.values.rating_label ?? 'Text-only entry';
+  return entry.values.mood_value !== null
+    ? `${entry.values.mood_value}/10`
+    : entry.values.mood_label ?? 'Text-only entry';
 }
 
 export function RatingHistoryScreen({ actionId }: Props) {
@@ -84,7 +84,7 @@ export function RatingHistoryScreen({ actionId }: Props) {
     );
   }
 
-  const presentation = getRatingMetricPresentation(detail.action.metric);
+  const presentation = getRatingMetricPresentation('mood');
   const elapsedDays = elapsedDayCount(detail.action);
 
   const startSelecting = () => {

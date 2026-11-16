@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { RecordingMetadata } from './recordingStorage';
 import { SessionInsightsCard } from './SessionInsightsCard';
-import { useRecordingLibrary } from './useRecordingLibrary';
+import { useSharedRecordingLibrary } from './RecordingLibraryProvider';
 
 function formatDuration(durationMs: number) {
   const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
@@ -43,13 +43,14 @@ function getProcessingLabel(recording: RecordingMetadata) {
       if (recording.failedStage === 'transcription') return 'Transcription failed';
       return 'Upload failed';
     case 'local':
+      return 'Preparing session…';
     case 'ready_for_insights':
-      return 'Ready to generate insights';
+      return 'Preparing session insights…';
   }
 }
 
 export function RecordingScreen() {
-  const library = useRecordingLibrary();
+  const library = useSharedRecordingLibrary();
 
   const confirmDelete = useCallback(
     (recording: RecordingMetadata) => {
@@ -170,8 +171,10 @@ export function RecordingScreen() {
               const isPlaying = library.playingId === recording.id;
               const processingStatus = recording.processingStatus ?? 'local';
               const isProcessing =
+                processingStatus === 'local' ||
                 processingStatus === 'uploading' ||
                 processingStatus === 'transcribing' ||
+                processingStatus === 'ready_for_insights' ||
                 processingStatus === 'generating_insights';
               const actionsDisabled = library.isRecording || library.isBusy || isProcessing;
               const processingLabel = getProcessingLabel(recording);
@@ -244,9 +247,7 @@ export function RecordingScreen() {
                       ]}>
                       {processingLabel}
                     </Text>
-                    {processingStatus === 'local' ||
-                    processingStatus === 'ready_for_insights' ||
-                    processingStatus === 'failed' ||
+                    {processingStatus === 'failed' ||
                     needsReviewUpgrade ? (
                       <Pressable
                         accessibilityLabel={

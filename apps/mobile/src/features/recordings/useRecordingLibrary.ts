@@ -90,6 +90,7 @@ export function useRecordingLibrary() {
     known: false,
   });
   const [recordingEvent, setRecordingEvent] = useState<RecordingStatus | null>(null);
+  const [pendingReviewId, setPendingReviewId] = useState<string | null>(null);
 
   const busyRef = useRef(false);
   const playbackBusyRef = useRef(false);
@@ -236,9 +237,9 @@ export function useRecordingLibrary() {
   );
 
   const finishRecording = useCallback(
-    async (reason: StopReason, eventUri?: string | null) => {
+    async (reason: StopReason, eventUri?: string | null): Promise<RecordingMetadata | null> => {
       if (busyRef.current || phaseRef.current !== 'recording') {
-        return;
+        return null;
       }
 
       busyRef.current = true;
@@ -264,15 +265,19 @@ export function useRecordingLibrary() {
         setRecordings((current) => [recording, ...current.filter((item) => item.id !== recording.id)]);
         setNotice(
           reason === 'background'
-            ? 'Saved after Moodi left the foreground.'
+            ? 'Saved after Moodi left the foreground. Preparing your session review.'
             : reason === 'interruption'
-              ? 'Saved after an audio interruption.'
-              : 'Saved. Generate insights when you are ready.',
+              ? 'Saved after an audio interruption. Preparing your session review.'
+              : 'Saved. Preparing your session review.',
         );
         setError(null);
+        setPendingReviewId(recording.id);
+        void processRecording(recording);
+        return recording;
       } catch (finishError) {
         setNotice(null);
         setError(messageFrom(finishError, 'The recording could not be finalized.'));
+        return null;
       } finally {
         startedAtRef.current = null;
         await resetAudioSession();
@@ -280,7 +285,7 @@ export function useRecordingLibrary() {
         updatePhase('idle');
       }
     },
-    [recorder, resetAudioSession, updatePhase],
+    [processRecording, recorder, resetAudioSession, updatePhase],
   );
 
   const startRecording = useCallback(async () => {
@@ -370,6 +375,8 @@ export function useRecordingLibrary() {
       void startRecording();
     }
   }, [finishRecording, startRecording]);
+
+  const consumePendingReview = useCallback(() => setPendingReviewId(null), []);
 
   const togglePlayback = useCallback(
     async (recording: RecordingMetadata) => {
@@ -482,7 +489,8 @@ export function useRecordingLibrary() {
           if (
             recording.processingStatus === 'uploading' ||
             recording.processingStatus === 'transcribing' ||
-            recording.processingStatus === 'generating_insights'
+            recording.processingStatus === 'generating_insights' ||
+            recording.processingStatus === 'ready_for_insights'
           ) {
             recoveredRecordings.push(
               await updatePersistedRecording({
@@ -490,7 +498,8 @@ export function useRecordingLibrary() {
                 failedStage:
                   recording.processingStatus === 'uploading'
                     ? 'upload'
-                    : recording.processingStatus === 'generating_insights'
+                    : recording.processingStatus === 'generating_insights' ||
+                        recording.processingStatus === 'ready_for_insights'
                       ? 'insights'
                       : 'transcription',
                 processingError: 'Processing was interrupted. Tap Retry to continue.',
@@ -584,6 +593,7 @@ export function useRecordingLibrary() {
   );
 
   return {
+    consumePendingReview,
     deleteRecording,
     durationMs: recorderState.durationMillis,
     error,
@@ -594,6 +604,7 @@ export function useRecordingLibrary() {
     notice,
     openSettings: Linking.openSettings,
     permission,
+    pendingReviewId,
     playingId: playerStatus.playing ? playingId : null,
     recordings,
     generateInsights,

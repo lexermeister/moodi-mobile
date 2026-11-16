@@ -16,7 +16,7 @@ function actionStartDate(action: RatingAction) {
 }
 
 function actionEndDate(action: RatingAction) {
-  if (action.settings.duration_kind === 'ongoing') return null;
+  if (action.settings.duration_kind !== 'fixed') return null;
   const startDate = actionStartDate(action);
   return (
     action.settings.end_date ??
@@ -34,7 +34,7 @@ export function getActionProgress(action: RatingAction, today = currentDayKey())
   const rawDay =
     Math.floor((dateKeyToTimestamp(today) - dateKeyToTimestamp(startDate)) / DAY_MS) + 1;
   const dayNumber =
-    action.settings.duration_kind === 'ongoing'
+    action.settings.duration_kind !== 'fixed'
       ? Math.max(1, rawDay)
       : Math.min(action.settings.duration_days ?? 1, Math.max(1, rawDay));
   return {
@@ -64,6 +64,7 @@ export function formatActionDate(dateKey: string) {
 }
 
 export function formatActionDateRange(action: RatingAction) {
+  if (action.settings.duration_kind === 'unscheduled') return 'Record when you want to';
   const { startDate, endDate } = getActionProgress(action);
   if (endDate === null) return `Started ${formatActionDate(startDate)} · Ongoing`;
   return `${formatActionDate(startDate)} – ${formatActionDate(endDate)}`;

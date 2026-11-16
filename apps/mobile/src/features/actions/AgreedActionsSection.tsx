@@ -3,19 +3,19 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import type { RecordRatingCandidate } from './actionTypes';
 import {
-  RecordRatingActionCard,
-  type RecordRatingSessionState,
-} from './RecordRatingActionCard';
+  RecordMoodSetupCard,
+  type RecordMoodSessionState,
+} from './RecordMoodSetupCard';
 
 type Props = {
   candidate: RecordRatingCandidate;
   draftId?: string;
-  onStatusChange?: (candidateId: string, status: RecordRatingSessionState) => void;
+  onStatusChange?: (candidateId: string, status: RecordMoodSessionState) => void;
   recordingId?: string;
   sourceVersion?: string;
 };
 
-const statusLabels: Record<RecordRatingSessionState, string> = {
+const statusLabels: Record<RecordMoodSessionState, string> = {
   active: 'ACTIVE',
   already_active: 'ALREADY ACTIVE',
   conflict: 'NEEDS ATTENTION',
@@ -33,10 +33,10 @@ export function AgreedActionsSection({
   recordingId,
   sourceVersion,
 }: Props) {
-  const [status, setStatus] = useState<RecordRatingSessionState>('loading');
+  const [status, setStatus] = useState<RecordMoodSessionState>('loading');
 
   const updateStatus = useCallback(
-    (nextStatus: RecordRatingSessionState) => {
+    (nextStatus: RecordMoodSessionState) => {
       setStatus((current) => (current === nextStatus ? current : nextStatus));
       onStatusChange?.(candidate.id, nextStatus);
     },
@@ -74,9 +74,8 @@ export function AgreedActionsSection({
         should support this agreed task.
       </Text>
 
-      <RecordRatingActionCard
+      <RecordMoodSetupCard
         candidate={candidate}
-        compactWhenActive
         draftId={draftId}
         onSessionStateChange={updateStatus}
         recordingId={recordingId}

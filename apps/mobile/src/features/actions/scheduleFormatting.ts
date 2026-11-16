@@ -14,6 +14,7 @@ function sentenceCase(value: string) {
 }
 
 export function formatActionCadence(settings: RecordRatingActionSettings) {
+  if (settings.duration_kind === 'unscheduled') return 'Record when you want to';
   if (settings.preferred_check_in_time) {
     return `Daily at ${formatClockTime(settings.preferred_check_in_time)}`;
   }
@@ -23,6 +24,7 @@ export function formatActionCadence(settings: RecordRatingActionSettings) {
 }
 
 export function formatActionDuration(settings: RecordRatingActionSettings) {
+  if (settings.duration_kind === 'unscheduled') return 'No end date';
   return settings.duration_kind === 'ongoing'
     ? 'Ongoing'
     : `${settings.duration_days ?? 1} days`;

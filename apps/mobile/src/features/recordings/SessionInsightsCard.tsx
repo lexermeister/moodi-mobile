@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AgreedActionsSection } from '../actions/AgreedActionsSection';
-import type { RecordRatingSessionState } from '../actions/RecordRatingActionCard';
+import type { RecordMoodSessionState } from '../actions/RecordMoodSetupCard';
 import type { RecordingMetadata } from './recordingStorage';
 import { SessionInsightsEditor } from './SessionInsightsEditor';
 import type { SessionInsightsReviewRequest } from './sessionInsightsReviewTypes';
@@ -21,7 +21,7 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
   const [summaryNotice, setSummaryNotice] = useState<{ draftId: string; message: string } | null>(
     null,
   );
-  const [actionStates, setActionStates] = useState<Record<string, RecordRatingSessionState>>({});
+  const [actionStates, setActionStates] = useState<Record<string, RecordMoodSessionState>>({});
   const insights = recording.sessionInsights?.result;
   const draftId = recording.sessionInsights?.draft_id;
   const reviewableInsights =
@@ -38,7 +38,8 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
     savedReview.source_version === recording.sessionInsights?.source_version
       ? savedReview
       : undefined;
-  const actionCandidates = insights?.action_candidates ?? [];
+  const actionCandidates = (insights?.action_candidates ?? []).filter(candidate => candidate.type === 'record_mood');
+  const hasLegacyActions = insights?.action_candidates.some(candidate => candidate.type === 'record_rating');
   const actionSourceVersion =
     recording.sessionInsights?.source_version ?? insights?.source_version ?? 'no-source';
   const actionStateKey = useCallback(
@@ -46,7 +47,7 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
     [actionSourceVersion, draftId],
   );
   const handleActionStatusChange = useCallback(
-    (candidateId: string, status: RecordRatingSessionState) => {
+    (candidateId: string, status: RecordMoodSessionState) => {
       const key = actionStateKey(candidateId);
       setActionStates((current) =>
         current[key] === status ? current : { ...current, [key]: status },
@@ -199,6 +200,9 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
             )}
           </View>
 
+          {hasLegacyActions ? <Text style={styles.disclaimer}>
+            This saved summary uses the earlier action format. Regenerate the summary to set up Record mood.
+          </Text> : null}
           {actionCandidates.map((candidate) => (
             <AgreedActionsSection
               candidate={candidate}
@@ -236,16 +240,16 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
 }
 
 const colors = {
-  ink: '#1e2421',
-  muted: '#68716b',
-  accentDark: '#ca3d28',
-  line: '#e5ded2',
+  ink: '#232129',
+  muted: '#706D7B',
+  accentDark: '#6045B7',
+  line: '#E9E6EF',
 };
 
 const styles = StyleSheet.create({
   container: { gap: 10 },
   insights: {
-    backgroundColor: '#f5f0e7',
+    backgroundColor: '#F4F0FC',
     borderRadius: 14,
     gap: 14,
     padding: 14,
@@ -253,7 +257,7 @@ const styles = StyleSheet.create({
   titleRow: { alignItems: 'center', flexDirection: 'row', gap: 8 },
   title: { color: colors.ink, flex: 1, fontSize: 17, fontWeight: '800' },
   statusBadge: {
-    backgroundColor: '#e8e2d8',
+    backgroundColor: '#DDD2FC',
     borderRadius: 8,
     color: colors.muted,
     fontSize: 10,

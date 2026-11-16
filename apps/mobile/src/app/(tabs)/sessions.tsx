@@ -1,5 +1,2 @@
-import { RecordingScreen } from '@/features/recordings/RecordingScreen';
-
-export default function SessionsScreen() {
-  return <RecordingScreen />;
-}
+import { Redirect } from 'expo-router';
+export default function SessionsRedirect() { return <Redirect href="/journey" />; }
