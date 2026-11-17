@@ -152,6 +152,48 @@ export async function getRatingCandidateResolution(
   return payload;
 }
 
+export type ActionReviewConfirmation = {
+  recording_id: string;
+  draft_id: string;
+  source_version: string;
+  status: 'confirmed';
+  candidate_ids: string[];
+  action_ids: string[];
+  confirmed_at: string;
+};
+
+function isActionReviewConfirmation(value: unknown): value is ActionReviewConfirmation {
+  if (!value || typeof value !== 'object') return false;
+  const item = value as Partial<ActionReviewConfirmation>;
+  return typeof item.recording_id === 'string' && typeof item.draft_id === 'string' &&
+    typeof item.source_version === 'string' && item.status === 'confirmed' &&
+    Array.isArray(item.candidate_ids) && item.candidate_ids.every(id => typeof id === 'string') &&
+    Array.isArray(item.action_ids) && item.action_ids.every(id => typeof id === 'string') &&
+    typeof item.confirmed_at === 'string';
+}
+
+export async function getActionReviewConfirmation(recordingId: string): Promise<ActionReviewConfirmation | null> {
+  let payload: unknown;
+  try {
+    payload = await requestJson(`/recordings/${encodeURIComponent(recordingId)}/actions/confirmation`);
+  } catch (error) {
+    if (error instanceof ActionsApiError && (error.status === 404 || error.status === 409)) return null;
+    throw error;
+  }
+  if (!isActionReviewConfirmation(payload)) throw new ActionsApiError('The Moodi backend returned an invalid Action confirmation.');
+  return payload;
+}
+
+export async function confirmActionReviews(recordingId: string, draftId: string, sourceVersion: string): Promise<ActionReviewConfirmation> {
+  const payload = await requestJson(`/recordings/${encodeURIComponent(recordingId)}/actions/confirmation`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ draft_id: draftId, source_version: sourceVersion }),
+  });
+  if (!isActionReviewConfirmation(payload)) throw new ActionsApiError('The Moodi backend returned an invalid Action confirmation.');
+  return payload;
+}
+
 export async function getRatingCandidateReview(
   recordingId: string,
   candidateId: string,

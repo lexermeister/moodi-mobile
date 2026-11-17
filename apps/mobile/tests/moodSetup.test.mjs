@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { isMoodMeasurements, isRecordRatingCandidate, isLegacyRatingCandidate, isRatingAction, isRatingEntry } from '../src/features/actions/actionTypes.ts';
-import { moodSettingsFromCandidate, toggleMeasurement } from '../src/features/actions/moodSetup.ts';
+import { initialReminderTime, moodSettingsFromCandidate, toggleMeasurement } from '../src/features/actions/moodSetup.ts';
+import { hasConfirmedMoodForToday, isMoodActionDue } from '../src/features/actions/moodSchedule.ts';
 
 const candidate = {
   id: 'C1', type: 'record_mood', actor: 'client', state: 'review_ready',
@@ -35,18 +36,36 @@ test('selection keeps Mood and toggles optional measurements without duplicates'
   assert.equal(isMoodMeasurements(['mood', 'mood']), false);
 });
 
-test('setup preserves reviewed measurements and creates no schedule or expiry', () => {
-  const settings = moodSettingsFromCandidate(candidate, ['mood', 'motivation']);
+test('review defaults to 8 PM while keeping an exact time heard in the session', () => {
+  assert.equal(initialReminderTime(null), '20:00');
+  assert.equal(initialReminderTime('around eight in the evening'), '20:00');
+  assert.equal(initialReminderTime('9:30 PM'), '21:30');
+});
+
+test('setup saves reviewed measurements and exact weekly schedule without expiry', () => {
+  const schedule = { cadence: 'weekly', time: '20:00', weeklyWeekday: 1, timeZone: 'Europe/Belgrade' };
+  const settings = moodSettingsFromCandidate(candidate, ['mood', 'motivation'], schedule);
   assert.deepEqual(settings.what_to_record, ['mood', 'motivation']);
-  assert.equal(settings.duration_kind, 'unscheduled');
-  for (const key of ['start_date', 'end_date', 'duration_days', 'preferred_check_in_time', 'preferred_time_zone']) {
+  assert.equal(settings.duration_kind, 'ongoing');
+  for (const key of ['start_date', 'end_date', 'duration_days']) {
     assert.equal(settings[key], null);
   }
+  assert.equal(settings.cadence, 'weekly');
+  assert.equal(settings.weekly_weekday, 1);
+  assert.equal(settings.preferred_check_in_time, '20:00');
+  assert.equal(settings.preferred_time_zone, 'Europe/Belgrade');
   const action = { id: 'a1', type: 'record_mood', state: 'active', recording_id: 'r1',
     transcript_version: 'v1', candidate_id: 'C1', source_ids: ['S1'], source_excerpt: 'I will record them',
     settings, created_at: '2026-11-16T10:00:00Z', revision: 1 };
   assert.equal(isRatingAction(action), true);
-  assert.equal(moodSettingsFromCandidate({ ...candidate, configuration: null }, ['mood']), null);
+  assert.equal(moodSettingsFromCandidate({ ...candidate, configuration: null }, ['mood'], schedule), null);
+  assert.equal(moodSettingsFromCandidate(candidate, ['mood'], { ...schedule, time: '8 pm' }), null);
+  assert.equal(moodSettingsFromCandidate(candidate, ['mood'], { ...schedule, weeklyWeekday: null }), null);
+  assert.equal(isMoodActionDue(action, new Date('2026-11-17T12:00:00Z')), true);
+  assert.equal(isMoodActionDue(action, new Date('2026-11-18T12:00:00Z')), false);
+  const entry = { status: 'confirmed', values: { entry_time: '2026-11-17T23:30:00Z', day_key: '2026-11-17' } };
+  assert.equal(hasConfirmedMoodForToday(action, [entry], new Date('2026-11-18T07:00:00Z')), true);
+  assert.equal(hasConfirmedMoodForToday(action, [entry], new Date('2026-11-19T07:00:00Z')), false);
 });
 
 test('entry parser accepts backend mood values including zero', () => {

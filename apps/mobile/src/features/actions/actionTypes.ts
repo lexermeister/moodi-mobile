@@ -20,6 +20,7 @@ export type RecordRatingConfiguration = {
 };
 
 export type MoodMeasurement = 'mood' | 'energy' | 'sleep_quality' | 'motivation';
+export type MoodCadence = 'daily' | 'weekdays' | 'weekly';
 
 export type RecordRatingCandidate = {
   what_to_record?: MoodMeasurement[];
@@ -59,6 +60,8 @@ export type RecordRatingActionSettings = {
   preferred_check_in_time: string | null;
   preferred_time_zone: string | null;
   schedule_origin: 'moodi_default' | 'user_selected';
+  cadence?: MoodCadence | null;
+  weekly_weekday?: number | null;
   configuration: RecordRatingConfiguration;
 };
 
@@ -241,6 +244,11 @@ function isRatingActionSettings(value: unknown): value is RecordRatingActionSett
     isNullableString(value.end_date) &&
     durationIsValid &&
     preferredTimeIsValid &&
+    (value.cadence === undefined || value.cadence === null || ['daily', 'weekdays', 'weekly'].includes(value.cadence as string)) &&
+    (value.weekly_weekday === undefined || value.weekly_weekday === null || (Number.isInteger(value.weekly_weekday) && Number(value.weekly_weekday) >= 0 && Number(value.weekly_weekday) <= 6)) &&
+    (value.cadence === undefined || value.cadence === null ||
+      (value.duration_kind !== 'unscheduled' && value.preferred_check_in_time !== null &&
+        (value.cadence === 'weekly' ? Number.isInteger(value.weekly_weekday) : value.weekly_weekday == null))) &&
     (value.schedule_origin === 'moodi_default' || value.schedule_origin === 'user_selected') &&
     isRecordRatingConfiguration(value.configuration) &&
     isMoodMeasurements(value.what_to_record)

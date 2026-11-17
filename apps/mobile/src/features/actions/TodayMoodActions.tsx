@@ -3,12 +3,11 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { ActivityIndicator, Text } from 'react-native';
 import { Button, Card, typography } from '@/ui/components';
 import { listRatingActions, listRatingEntries } from './actionsApi';
-import { currentDayKey, getActionProgress } from './actionStatus';
 import type { RatingAction, RatingEntry } from './actionTypes';
 import { measurementLabels } from './moodSetup';
 import { latestMoodDraft } from './moodWizardDomain';
 import { MoodEntryWizard } from './MoodEntryWizard';
-import { confirmedMoodEntries } from './moodEntryPresentation';
+import { hasConfirmedMoodForToday, isMoodActionDue } from './moodSchedule';
 
 export function TodayMoodActions({ onEntriesChanged }: { onEntriesChanged?: () => void }) {
   const router = useRouter();
@@ -22,12 +21,10 @@ export function TodayMoodActions({ onEntriesChanged }: { onEntriesChanged?: () =
     const version = ++request.current;
     setLoading(true);
     try {
-      const actions = (await listRatingActions()).filter(action => action.state === 'active' &&
-        !getActionProgress(action).completed && (!action.settings.start_date || action.settings.start_date <= currentDayKey()));
-      const today = currentDayKey();
+      const actions = (await listRatingActions()).filter(action => action.state === 'active' && isMoodActionDue(action));
       const rows = await Promise.all(actions.map(async action => {
         const entries = await listRatingEntries(action.id);
-        return { action, draft: latestMoodDraft(entries), completedToday: confirmedMoodEntries(entries, today).length > 0 };
+        return { action, draft: latestMoodDraft(entries), completedToday: hasConfirmedMoodForToday(action, entries) };
       }));
       if (request.current === version) { setItems(rows.filter(row => !row.completedToday)); setError(null); }
     } catch (cause) {
@@ -43,7 +40,7 @@ export function TodayMoodActions({ onEntriesChanged }: { onEntriesChanged?: () =
     opening.current = true;
     try {
       const entries = await listRatingEntries(action.id);
-      if (confirmedMoodEntries(entries, currentDayKey()).length) { void refresh(); onEntriesChanged?.(); return; }
+      if (hasConfirmedMoodForToday(action, entries)) { void refresh(); onEntriesChanged?.(); return; }
       const draft = latestMoodDraft(entries);
       setSession({ action, draft });
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not open this check-in.'); }
