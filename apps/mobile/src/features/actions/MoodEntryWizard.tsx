@@ -199,7 +199,7 @@ export function MoodEntryWizard({ action, draft, onClose }: { action: RatingActi
       </> : <>
         {step !== 'mood' ? button('Skip', () => next(true), true, locked) : null}
         {button('Continue  →', () => next(), false, locked || (step === 'mood' && values.mood_value === null))}
-        {step !== 'mood' ? button('Review now', () => move('review'), true, locked || values.mood_value === null) : null}
+        {button('Review now', () => move('review'), true, locked || values.mood_value === null)}
       </>}
     </View>
   </View>;
