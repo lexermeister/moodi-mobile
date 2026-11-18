@@ -6,6 +6,7 @@ import { RecentMoodChart } from './RecentMoodChart';
 import { TodayMoodActions } from '../actions/TodayMoodActions';
 import { MoodEntriesSection } from '../actions/MoodEntriesSection';
 import { DemoResetButton } from './DemoResetButton';
+import { ReviewSessionTodo } from './ReviewSessionTodo';
 
 export function MoodiScreen() {
   const { setOpen, entryVersion } = useMoodiPanel();
@@ -17,6 +18,7 @@ export function MoodiScreen() {
       <DemoResetButton />
     </View>
     <Text style={typography.heading}>To do</Text>
+    <ReviewSessionTodo />
     <TodayMoodActions refreshKey={entryVersion} />
     <Card><Text style={typography.heading}>{library.isRecording ? 'Session in progress' : 'A space for your session'}</Text>
       <Text style={typography.body}>{library.isRecording ? 'Open Moodi to see your recording.' : 'When you’re ready, open Moodi to record a session.'}</Text>

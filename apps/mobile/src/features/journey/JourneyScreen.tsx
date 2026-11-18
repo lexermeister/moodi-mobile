@@ -13,6 +13,7 @@ import { useMoodiPanel } from '../shell/MoodiPanel';
 import { completedMoodTimeline } from './completedMoodTimeline';
 import { sessionDate, sessionStatus, sortedSessions } from './sessionPresentation';
 import { DemoResetButton } from '../shell/DemoResetButton';
+import { useSessionReviewStatus } from './useSessionReviewStatus';
 
 function CompletedActions({ period, entries, onSelect, initiallyOpen = false }: {
   period: string; entries: RatingEntry[]; onSelect: (entry: RatingEntry) => void; initiallyOpen?: boolean;
@@ -65,6 +66,7 @@ export function JourneyScreen() {
     return () => { active = false; };
   }, [retry, entryVersion]));
   const sessions = sortedSessions(library.recordings);
+  const { needsReview, error: reviewError } = useSessionReviewStatus(sessions[0]);
   const groups = completedMoodTimeline(sessions, entries);
   const shortDate = (index: number) => sessionDate(sessions[index]).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   return <Page>
@@ -79,7 +81,11 @@ export function JourneyScreen() {
       <Button label="Record a session" onPress={() => setOpen(true)} />
     </Card> : null}
     <View style={styles.timeline}>
-    {sessions.map((recording, index) => <View key={recording.id}>
+    {sessions.map((recording, index) => {
+      const status = index === 0 && reviewError ? 'Review status unavailable' :
+        index === 0 && needsReview === true ? 'Needs review' :
+        index === 0 && needsReview === null ? 'Checking review status' : sessionStatus(recording);
+      return <View key={recording.id}>
       {!actionsLoading && !actionsError ? <CompletedActions
         initiallyOpen={index === 0}
         period={index === 0 ? `Since ${shortDate(0)}` : `${shortDate(index)} – ${shortDate(index - 1)}`}
@@ -88,16 +94,16 @@ export function JourneyScreen() {
       <View style={styles.session}>
       <View style={[styles.dot, index === 0 && styles.activeDot]} />
       <Pressable accessibilityRole="button"
-      accessibilityLabel={`${sessionDate(recording).toLocaleDateString(undefined, { dateStyle: 'long' })}, ${sessionStatus(recording)}`}
+      accessibilityLabel={`${sessionDate(recording).toLocaleDateString(undefined, { dateStyle: 'long' })}, ${status}`}
       onPress={() => router.push({ pathname: '/journey/session/[id]', params: { id: recording.id } })}
       style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}>
       <View style={[styles.iconBox, index === 0 && styles.recentIcon]}><Text style={styles.documentIcon}>▤</Text></View>
       <View style={styles.copy}><Text style={styles.date}>{sessionDate(recording).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', ...(sessionDate(recording).getFullYear() !== new Date().getFullYear() ? { year: 'numeric' as const } : {}) })}</Text>
         <Text style={styles.subtitle}><Text style={styles.sessionLabel}>{index === 0 ? 'Most recent session' : 'Past session'}</Text> · {new Date(recording.createdAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</Text>
-        {['Processing', 'Needs retry'].includes(sessionStatus(recording)) ? <Text style={styles.status}>{sessionStatus(recording)}</Text> : null}</View>
+        {['Processing', 'Needs retry', 'Needs review', 'Checking review status', 'Review status unavailable'].includes(status) ? <Text style={styles.status}>{status}</Text> : null}</View>
       <Text style={styles.arrow}>›</Text>
     </Pressable></View>
-    </View>)}
+    </View>; })}
     {!actionsLoading && !actionsError && groups[sessions.length].length ? <CompletedActions
       period={sessions.length ? `Before ${shortDate(sessions.length - 1)}` : 'Your mood history'}
       entries={groups[sessions.length]} onSelect={setSelected} initiallyOpen={!sessions.length}
