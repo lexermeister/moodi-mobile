@@ -9,10 +9,10 @@ import { useSharedRecordingLibrary } from '../recordings/RecordingLibraryProvide
 import { sessionDate } from './sessionPresentation';
 import { recordMoodCandidates, summaryReviewRequest } from './sessionReviewDomain';
 
-type Step = 'summary' | 'actions' | 'mood';
+type Step = 'review' | 'mood';
 
-export function JourneySummary({ recording }: { recording: RecordingMetadata }) {
-  const [step, setStep] = useState<Step>('summary');
+export function JourneySummary({ recording, onClose }: { recording: RecordingMetadata; onClose: () => void }) {
+  const [step, setStep] = useState<Step>('review');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionStates, setActionStates] = useState<Record<string, RecordMoodSessionState>>({});
   const [saving, setSaving] = useState(false);
@@ -41,7 +41,7 @@ export function JourneySummary({ recording }: { recording: RecordingMetadata }) 
   const confirmed = Boolean(actionConfirmation && actionConfirmation.draft_id === insights?.draft_id &&
     actionConfirmation.source_version === insights?.source_version &&
     actionConfirmation.candidate_ids.join('|') === candidateKey);
-  const canConfirm = Boolean(recording.backendRecordingId && insights?.draft_id && insights?.source_version &&
+  const canConfirm = Boolean(review && recording.backendRecordingId && insights?.draft_id && insights?.source_version &&
     candidates.length > 0 && !loadingActions && !confirming && !confirmed &&
     candidates.every(candidate => ['active', 'linked_existing'].includes(actionStates[actionKey(candidate.id)])));
 
@@ -94,6 +94,7 @@ export function JourneySummary({ recording }: { recording: RecordingMetadata }) 
     setError(null);
     try {
       setActionConfirmation(await confirmActionReviews(recordingId, insights.draft_id, insights.source_version));
+      onClose();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not confirm these actions.');
     } finally { setConfirming(false); }
@@ -101,11 +102,11 @@ export function JourneySummary({ recording }: { recording: RecordingMetadata }) 
 
   return <View style={styles.panel}>
     <Text style={styles.brand}>Moodi</Text>
-    {step !== 'summary' ? <Pressable accessibilityRole="button" onPress={() => setStep(step === 'mood' ? 'actions' : 'summary')} style={styles.back}>
+    {step === 'mood' ? <Pressable accessibilityRole="button" onPress={() => setStep('review')} style={styles.back}>
       <Text style={styles.backText}>‹  Back</Text>
     </Pressable> : null}
-    <ScrollView nestedScrollEnabled contentContainerStyle={styles.content}>
-      {step === 'summary' ? <>
+    <ScrollView key={step} nestedScrollEnabled contentContainerStyle={styles.content}>
+      {step === 'review' ? <>
         <Text accessibilityRole="header" style={styles.title}>Here’s what I heard</Text>
         <Text style={styles.intro}>Take a look at the summary. {candidates.length ? `I pulled out ${candidates.length === 1 ? 'one action' : `${candidates.length} actions`} you agreed to try.` : 'Review what we discussed.'}</Text>
         <View style={styles.summaryCard}>
@@ -119,35 +120,33 @@ export function JourneySummary({ recording }: { recording: RecordingMetadata }) 
               {section.bullets.map((bullet, index) => <View key={index} style={styles.bullet}><Text style={styles.bulletMark}>•</Text><Text selectable style={styles.bulletText}>{bullet}</Text></View>)}
             </View>) : <Text style={styles.body}>No summary points are available.</Text>}
         </View>
-      </> : step === 'actions' ? <>
-        <Text accessibilityRole="header" style={styles.sectionTitle}>Actions to review</Text>
-        <Text style={styles.body}>Open each action to check the plan and activate it when you’re ready.</Text>
-        {candidates.length ? candidates.map(candidate => <Pressable key={candidate.id} accessibilityRole="button"
-          accessibilityLabel="Review Record mood" onPress={() => { setSelectedId(candidate.id); setStep('mood'); }} style={styles.actionRow}>
-          <View style={styles.actionIcon}><MoodiWave width={20} /></View>
-          <View style={styles.actionCopy}><Text style={styles.actionName}>Record mood</Text>
-            <Text style={styles.actionDetail}>{[candidate.frequency, candidate.timing, measurementLabels(candidate.what_to_record ?? ['mood'])].filter(Boolean).join(' · ')}</Text></View>
-          <Text style={styles.reviewLink}>{confirmed ? 'Confirmed' : actionStates[actionKey(candidate.id)] === 'active' || actionStates[actionKey(candidate.id)] === 'linked_existing' ? 'Active' : 'Review'} ›</Text>
-        </Pressable>) : <Text style={styles.body}>No Record mood action was identified in this session.</Text>}
-        {confirmed ? <Text style={styles.success}>Actions confirmed ✓</Text> : null}
+        {insights ? <>
+          <Pressable accessibilityRole="button" disabled={!reviewRequest || saving || Boolean(review)} onPress={() => void markReviewed()}
+            style={[styles.secondaryButton, (!reviewRequest || saving || review) && styles.disabled]}>
+            <Text style={styles.secondaryText}>{review ? 'Reviewed ✓' : saving ? 'Saving…' : 'Mark as reviewed ✓'}</Text>
+          </Pressable>
+          <Text accessibilityRole="header" style={styles.sectionTitle}>Actions to review</Text>
+          <Text style={styles.body}>Open each action to check the plan and activate it when you’re ready.</Text>
+          {candidates.length ? candidates.map(candidate => <Pressable key={candidate.id} accessibilityRole="button"
+            accessibilityLabel="Review Record mood" onPress={() => { setSelectedId(candidate.id); setStep('mood'); }} style={styles.actionRow}>
+            <View style={styles.actionIcon}><MoodiWave width={20} /></View>
+            <View style={styles.actionCopy}><Text style={styles.actionName}>Record mood</Text>
+              <Text style={styles.actionDetail}>{[candidate.frequency, candidate.timing, measurementLabels(candidate.what_to_record ?? ['mood'])].filter(Boolean).join(' · ')}</Text></View>
+            <Text style={styles.reviewLink}>{confirmed ? 'Confirmed' : actionStates[actionKey(candidate.id)] === 'active' || actionStates[actionKey(candidate.id)] === 'linked_existing' ? 'Active' : 'Review'} ›</Text>
+          </Pressable>) : <Text style={styles.body}>No Record mood action was identified in this session.</Text>}
+          {confirmed ? <Text style={styles.success}>Actions confirmed ✓</Text> : null}
+        </> : null}
       </> : selected ? <RecordMoodSetupCard key={`${insights?.draft_id}:${selected.id}`} candidate={selected}
         recordingId={recording.backendRecordingId} draftId={insights?.draft_id} sourceVersion={insights?.source_version}
         onSessionStateChange={status => setActionStates(current => current[actionKey(selected.id)] === status ? current : { ...current, [actionKey(selected.id)]: status })}
-        onActivated={() => { setSelectedId(null); setStep('actions'); }} /> : null}
+        onActivated={() => { setSelectedId(null); setStep('review'); }} /> : null}
     </ScrollView>
     {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-    {step === 'summary' ? <View style={styles.footer}>
-      <Pressable accessibilityRole="button" disabled={!reviewRequest || saving || Boolean(review)} onPress={() => void markReviewed()} style={[styles.secondaryButton, (!reviewRequest || saving || review) && styles.disabled]}>
-        <Text style={styles.secondaryText}>{review ? 'Reviewed ✓' : saving ? 'Saving…' : 'Mark as reviewed ✓'}</Text>
-      </Pressable>
-      <Pressable accessibilityRole="button" onPress={() => setStep('actions')} style={styles.primaryButton}>
-        <Text style={styles.primaryText}>Review actions  →</Text>
-      </Pressable>
-    </View> : step === 'actions' ? <View style={styles.footer}>
-      <Pressable accessibilityRole="button" onPress={() => setStep('summary')} style={styles.secondaryButton}><Text style={styles.secondaryText}>Back to summary</Text></Pressable>
-      <Pressable accessibilityRole="button" disabled={!canConfirm} onPress={() => void confirmActions()}
-        style={[styles.primaryButton, !canConfirm && styles.disabled]}>
-        <Text style={styles.primaryText}>{confirmed ? 'Confirmed ✓' : confirming ? 'Confirming…' : 'Confirm'}</Text>
+    {step === 'review' && review && (canConfirm || confirmed || !candidates.length) ? <View style={styles.footer}>
+      <Pressable accessibilityRole="button" disabled={confirming}
+        onPress={() => confirmed || !candidates.length ? onClose() : void confirmActions()}
+        style={[styles.primaryButton, confirming && styles.disabled]}>
+        <Text style={styles.primaryText}>{confirming ? 'Confirming…' : confirmed || !candidates.length ? 'Done' : 'Confirm'}</Text>
       </Pressable>
     </View> : null}
   </View>;

@@ -35,7 +35,7 @@ export function SessionScreen() {
         <Pressable accessibilityRole="button" accessibilityLabel={detailsOpen ? 'Hide recording details' : 'Show recording details'}
           onPress={() => setDetailsOpen(value => !value)} style={styles.more}><Text style={styles.moreText}>⋯</Text></Pressable></View>
         <Text style={styles.title}>{isToday ? 'Today' : 'Session review'}</Text></View>
-      <JourneySummary recording={recording} />
+      <JourneySummary recording={recording} onClose={back} />
     </View>
     {(detailsOpen || canRetry || isProcessing(recording)) ? <>
     <Text style={typography.heading}>Recording</Text>
