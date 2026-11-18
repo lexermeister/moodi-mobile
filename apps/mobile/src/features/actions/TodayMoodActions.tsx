@@ -6,15 +6,15 @@ import { listRatingActions, listRatingEntries } from './actionsApi';
 import type { RatingAction, RatingEntry } from './actionTypes';
 import { measurementLabels } from './moodSetup';
 import { latestMoodDraft } from './moodWizardDomain';
-import { MoodEntryWizard } from './MoodEntryWizard';
 import { hasConfirmedMoodForToday, isMoodActionDue } from './moodSchedule';
+import { useMoodiPanel } from '../shell/MoodiPanel';
 
-export function TodayMoodActions({ onEntriesChanged }: { onEntriesChanged?: () => void }) {
+export function TodayMoodActions({ refreshKey }: { refreshKey: number }) {
   const router = useRouter();
+  const { openMoodCheckIn } = useMoodiPanel();
   const [items, setItems] = useState<{ action: RatingAction; draft?: RatingEntry }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [session, setSession] = useState<{ action: RatingAction; draft?: RatingEntry } | null>(null);
   const opening = useRef(false);
   const request = useRef(0);
   const refresh = useCallback(async () => {
@@ -31,7 +31,7 @@ export function TodayMoodActions({ onEntriesChanged }: { onEntriesChanged?: () =
       if (request.current === version) setError(cause instanceof Error ? cause.message : 'Could not load your actions.');
     } finally { if (request.current === version) setLoading(false); }
   }, []);
-  useFocusEffect(useCallback(() => { void refresh(); return () => { ++request.current; }; }, [refresh]));
+  useFocusEffect(useCallback(() => { void refreshKey; void refresh(); return () => { ++request.current; }; }, [refresh, refreshKey]));
   async function open(action: RatingAction) {
     if (opening.current) return;
     if (action.settings.configuration.input_kind !== 'numeric_0_10') {
@@ -40,9 +40,9 @@ export function TodayMoodActions({ onEntriesChanged }: { onEntriesChanged?: () =
     opening.current = true;
     try {
       const entries = await listRatingEntries(action.id);
-      if (hasConfirmedMoodForToday(action, entries)) { void refresh(); onEntriesChanged?.(); return; }
+      if (hasConfirmedMoodForToday(action, entries)) { void refresh(); return; }
       const draft = latestMoodDraft(entries);
-      setSession({ action, draft });
+      openMoodCheckIn({ action, draft });
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not open this check-in.'); }
     finally { opening.current = false; }
   }
@@ -55,7 +55,5 @@ export function TodayMoodActions({ onEntriesChanged }: { onEntriesChanged?: () =
       {draft ? <Text style={typography.body}>Unfinished entry · {new Date(draft.values.entry_time).toLocaleDateString()}</Text> : null}
       <Button label={draft ? 'Resume check-in' : 'Record mood'} onPress={() => void open(action)} />
     </Card>)}
-    {session ? <MoodEntryWizard key={session.draft?.id ?? session.action.id} action={session.action} draft={session.draft}
-      onClose={() => { setSession(null); void refresh(); onEntriesChanged?.(); }} /> : null}
   </>;
 }

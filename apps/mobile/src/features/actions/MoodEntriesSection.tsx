@@ -38,6 +38,8 @@ export function MoodEntryDetail({ entry, onClose }: { entry: RatingEntry; onClos
             {feeling ? <DetailRow label="Feeling" value={feeling} /> : null}
             {values.feeling_intensity != null ? <DetailRow label="Feeling intensity" value={`${values.feeling_intensity} / 10`} /> : null}
             {values.context?.trim() ? <DetailRow label="What happened" value={values.context.trim()} /> : null}
+            {values.thoughts?.trim() ? <DetailRow label="What went through your mind?" value={values.thoughts.trim()} /> : null}
+            {values.actions_taken?.trim() ? <DetailRow label="What did you do?" value={values.actions_taken.trim()} /> : null}
           </View>
         </ScrollView>
         <Pressable accessibilityRole="button" accessibilityLabel="Done viewing mood entry" onPress={onClose} style={styles.done}>

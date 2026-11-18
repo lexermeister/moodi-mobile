@@ -11,13 +11,14 @@ export const MEASUREMENTS = [
 export function cleanMoodValues(values: RatingEntryValues): RatingEntryValues {
   const custom = values.custom_feeling?.trim() || null;
   return { ...values, custom_feeling: custom, context: values.context?.trim() || null,
+    thoughts: values.thoughts?.trim() || null, actions_taken: values.actions_taken?.trim() || null,
     feeling_intensity: values.feelings?.length || custom ? values.feeling_intensity ?? null : null };
 }
 
 export function moodSteps(measurements: MoodMeasurement[], values: RatingEntryValues): MoodStep[] {
   return ['mood', ...(measurements.some(value => value !== 'mood') ? ['additional_ratings' as const] : []),
     'feelings', ...(values.feelings?.length || values.custom_feeling?.trim() ? ['intensity' as const] : []),
-    'context', 'review'];
+    'context', 'thoughts', 'actions_taken', 'review'];
 }
 
 export function latestMoodDraft(entries: RatingEntry[]) {
@@ -30,6 +31,8 @@ export function skipMoodStep(values: RatingEntryValues, step: MoodStep): RatingE
   if (step === 'feelings') return { ...values, feelings: [], custom_feeling: null, feeling_intensity: null };
   if (step === 'intensity') return { ...values, feeling_intensity: null };
   if (step === 'context') return { ...values, context: null };
+  if (step === 'thoughts') return { ...values, thoughts: null };
+  if (step === 'actions_taken') return { ...values, actions_taken: null };
   return values;
 }
 

@@ -111,7 +111,7 @@ export type RatingEntryValues = {
   feelings?: ('Calm' | 'Tired' | 'Relieved' | 'Anxious')[];
   custom_feeling?: string | null;
   feeling_intensity?: number | null;
-  current_step?: 'mood' | 'additional_ratings' | 'feelings' | 'intensity' | 'context' | 'review';
+  current_step?: 'mood' | 'additional_ratings' | 'feelings' | 'intensity' | 'context' | 'thoughts' | 'actions_taken' | 'review';
   relevant_date: string;
   entry_time: string;
   timezone_offset_minutes: number;
@@ -119,6 +119,8 @@ export type RatingEntryValues = {
   mood_value: number | null;
   mood_label: string | null;
   context: string | null;
+  thoughts?: string | null;
+  actions_taken?: string | null;
   scale_id: string | null;
 };
 
@@ -317,6 +319,8 @@ function isRatingEntryValues(value: unknown): value is RatingEntryValues {
     (value.mood_value === null || typeof value.mood_value === 'number') &&
     isNullableString(value.mood_label) &&
     isNullableString(value.context) &&
+    (value.thoughts === undefined || isNullableString(value.thoughts)) &&
+    (value.actions_taken === undefined || isNullableString(value.actions_taken)) &&
     isNullableString(value.scale_id)
   );
 }
