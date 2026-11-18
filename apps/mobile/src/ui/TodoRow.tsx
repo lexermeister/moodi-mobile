@@ -2,11 +2,12 @@ import { SymbolView } from 'expo-symbols';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { theme } from './theme';
 
-type TodoKind = 'session' | 'mood';
+type TodoKind = 'session' | 'mood' | 'recording';
 
 const icons = {
   session: { ios: 'doc.text', android: 'description', web: 'description' },
   mood: { ios: 'bell', android: 'notifications', web: 'notifications' },
+  recording: { ios: 'mic', android: 'mic', web: 'mic' },
 } as const;
 
 export function TodoRow({ kind, title, subtitle, onPress }: {
@@ -14,8 +15,8 @@ export function TodoRow({ kind, title, subtitle, onPress }: {
 }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={`${title}. ${subtitle}`}
     onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
-    <View style={[styles.icon, kind === 'session' ? styles.sessionIcon : styles.moodIcon]}>
-      <SymbolView name={icons[kind]} size={22} tintColor={kind === 'session' ? '#287453' : '#2F7382'} />
+    <View style={[styles.icon, kind === 'session' ? styles.sessionIcon : kind === 'recording' ? styles.recordingIcon : styles.moodIcon]}>
+      <SymbolView name={icons[kind]} size={22} tintColor={kind === 'session' ? '#287453' : kind === 'recording' ? '#6045B7' : '#2F7382'} />
     </View>
     <View style={styles.copy}><Text style={styles.title}>{title}</Text><Text style={styles.subtitle}>{subtitle}</Text></View>
     <Text style={styles.arrow}>›</Text>
@@ -28,6 +29,7 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.65 },
   icon: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   sessionIcon: { backgroundColor: '#E5F4ED' }, moodIcon: { backgroundColor: '#E3F4F7' },
+  recordingIcon: { backgroundColor: '#EEE8FF' },
   copy: { flex: 1, gap: 2 }, title: { color: theme.colors.ink, fontSize: 14, fontWeight: '700' },
   subtitle: { color: theme.colors.muted, fontSize: 12 }, arrow: { color: theme.colors.muted, fontSize: 24 },
 });

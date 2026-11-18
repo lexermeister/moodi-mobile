@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type PropsWithChildren 
 import { AppState, Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
 import { Button } from '@/ui/components';
 import { theme } from '@/ui/theme';
 import { MoodiWave } from '@/ui/MoodiWave';
@@ -12,6 +13,7 @@ import { latestMoodDraft } from '../actions/moodWizardDomain';
 import { hasConfirmedMoodForToday, isMoodActionDue } from '../actions/moodSchedule';
 import { useSharedRecordingLibrary } from '../recordings/RecordingLibraryProvider';
 import { formatDuration } from '../journey/sessionPresentation';
+import { RecordingWaveform } from './RecordingWaveform';
 
 type MoodSession = { action: RatingAction; draft?: RatingEntry };
 type PanelState = {
@@ -89,41 +91,69 @@ export function MoodiPanel() {
         </Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.panelContent}>
-        <Text accessibilityRole="header" style={styles.title}>{library.isRecording ? 'Recording session' : library.isStarting ? 'Preparing microphone…' : library.isBusy ? 'Saving your recording…' : 'Ready when you are'}</Text>
-        {active ? <Text style={styles.timer}>{formatDuration(library.durationMs)}</Text> :
-          <Text style={styles.copy}>{moodOption ? 'Record a session or check in with your mood.' : 'Record a session, then review it in Journey.'}</Text>}
-        {!active && moodOption ? <Button label={moodOption.draft ? 'Resume mood check-in' : 'Record mood'}
-          onPress={() => { setAvailableMood(null); openMoodCheckIn(moodOption); }} /> : null}
-        <Button label={library.isRecording ? 'Stop recording' : 'Start recording'} disabled={library.isBusy} onPress={library.toggleRecording} />
+        {library.isRecording ? <>
+          <Text accessibilityRole="header" style={styles.title}>Recording session</Text>
+          <View style={styles.callCard}>
+            <RecordingWaveform />
+            <Text accessibilityLiveRegion="polite" style={styles.timer}>{formatDuration(library.durationMs).padStart(5, '0')}</Text>
+            <Text style={styles.callCaption}>Recording in progress</Text>
+          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel="Stop recording" onPress={library.toggleRecording}
+            style={({ pressed }) => [styles.actionButton, pressed && styles.pressed]}>
+            <Text style={styles.actionText}>Stop recording</Text>
+            <SymbolView name={{ ios: 'checkmark', android: 'check', web: 'check' }} size={19} tintColor="#282038" />
+          </Pressable>
+        </> : <>
+          <Text accessibilityRole="header" style={styles.title}>{library.isStarting ? 'Preparing microphone…' : library.isBusy ? 'Saving your recording…' : 'Ready when you are'}</Text>
+          {!active ? <Text style={styles.copy}>I’ll prepare a transcript and pull out what you agreed to try.</Text> : null}
+          <Pressable accessibilityRole="button" accessibilityLabel="Start recording" disabled={library.isBusy}
+            onPress={library.toggleRecording} style={({ pressed }) => [styles.actionButton, (pressed || library.isBusy) && styles.pressed]}>
+            <Text style={styles.actionText}>{library.isStarting ? 'Preparing…' : library.isBusy ? 'Saving…' : 'Start recording'}</Text>
+            <SymbolView name={{ ios: 'mic', android: 'mic', web: 'mic' }} size={20} tintColor="#282038" />
+          </Pressable>
+          {!active && moodOption ? <Button label={moodOption.draft ? 'Resume mood check-in' : 'Record mood'} secondary
+            onPress={() => { setAvailableMood(null); openMoodCheckIn(moodOption); }} /> : null}
+        </>}
         {library.permission.known && !library.permission.granted ? <>
           <Text style={styles.copy}>Allow microphone access to record your session.</Text>
           {!library.permission.canAskAgain ? <Button label="Open Settings" onPress={() => void library.openSettings()} /> : null}
         </> : null}
         {library.error ? <Text accessibilityLiveRegion="assertive" style={styles.copy}>{library.error}</Text> : null}
         {library.notice ? <Text accessibilityLiveRegion="polite" style={styles.copy}>{library.notice}</Text> : null}
-        {!active && library.recordings.length ? <Button label="View Journey" onPress={() => { setOpen(false); router.navigate('/journey'); }} /> : null}
       </ScrollView>
     </View> : null}
     <Pressable accessibilityRole="button" accessibilityLabel={open ? 'Minimize Moodi' : active ? 'Open recording controls' : 'Ask Moodi'}
-      accessibilityState={{ expanded: open }} onPress={() => { if (open) Keyboard.dismiss(); setOpen(!open); }} style={styles.launcher}>
-      {library.isRecording ? <Text style={styles.recordingDot}>●</Text> : <MoodiWave />}
+      accessibilityState={{ expanded: open }} onPress={() => { if (open) Keyboard.dismiss(); setOpen(!open); }}
+      style={[styles.launcher, library.isRecording && styles.recordingLauncher]}>
+      <MoodiWave color={library.isRecording ? '#33254B' : '#D7CCFF'} />
+      {library.isRecording ? <View style={styles.recordingIndicator} /> : null}
     </Pressable>
   </View>;
 }
 const styles = StyleSheet.create({
   layer: { position: 'absolute', right: 16, left: 16, justifyContent: 'flex-end', alignItems: 'flex-end', gap: 8 },
-  panel: { backgroundColor: theme.colors.panel, borderRadius: 24, padding: 16, width: '100%', maxWidth: 400, flexShrink: 1 },
+  panel: { backgroundColor: theme.colors.panel, borderRadius: 24, padding: 16, width: '100%', maxWidth: 400, flexShrink: 1,
+    borderWidth: 1, borderColor: '#4A4655', shadowColor: '#19151F', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.26, shadowRadius: 18, elevation: 10 },
   moodPanel: { backgroundColor: theme.colors.panel, borderRadius: 22, width: '100%', maxWidth: 400, height: 560, maxHeight: '100%', overflow: 'hidden' },
   hidden: { display: 'none' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   name: { color: theme.colors.panelText, fontWeight: '700', fontSize: 13 },
   close: { minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
-  panelContent: { gap: 16, paddingBottom: 4 },
+  panelContent: { gap: 16, paddingBottom: 4, paddingTop: 8 },
   title: { color: theme.colors.panelText, fontSize: 25, fontWeight: '700', letterSpacing: -0.5 },
   copy: { color: theme.colors.panelMuted, fontSize: 15, lineHeight: 23 },
-  timer: { color: theme.colors.panelText, fontSize: 32, fontVariant: ['tabular-nums'] },
+  callCard: { backgroundColor: '#332E40', borderWidth: 1, borderColor: '#4A4259', borderRadius: 16,
+    alignItems: 'center', paddingHorizontal: 12, paddingTop: 12, paddingBottom: 16 },
+  timer: { color: '#C6B4FF', fontSize: 52, fontWeight: '700', fontVariant: ['tabular-nums'], letterSpacing: 1 },
+  callCaption: { color: theme.colors.panelMuted, fontSize: 13, marginTop: 3 },
+  actionButton: { alignSelf: 'flex-start', minHeight: 48, borderRadius: 13, backgroundColor: '#C6B4FF',
+    paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
+  actionText: { color: '#282038', fontSize: 16, fontWeight: '700' },
+  pressed: { opacity: 0.65 },
   launcher: { width: 54, height: 54, borderRadius: 19, backgroundColor: theme.colors.panel,
     alignItems: 'center', justifyContent: 'center', shadowColor: '#19151F', shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.22, shadowRadius: 12, elevation: 7 },
-  recordingDot: { color: '#D7C8FF', fontSize: 25, lineHeight: 30, includeFontPadding: false },
+  recordingLauncher: { backgroundColor: '#C6B4FF' },
+  recordingIndicator: { position: 'absolute', top: 1, right: 1, width: 11, height: 11, borderRadius: 6,
+    backgroundColor: '#77C5A0', borderWidth: 2, borderColor: theme.colors.panel },
 });
