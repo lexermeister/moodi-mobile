@@ -2,9 +2,10 @@ import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ActivityIndicator, Text } from 'react-native';
 import { Button, Card, typography } from '@/ui/components';
+import { TodoRow } from '@/ui/TodoRow';
 import { listRatingActions, listRatingEntries } from './actionsApi';
 import type { RatingAction, RatingEntry } from './actionTypes';
-import { measurementLabels } from './moodSetup';
+import { formatClockTime } from './scheduleFormatting';
 import { latestMoodDraft } from './moodWizardDomain';
 import { hasConfirmedMoodForToday, isMoodActionDue } from './moodSchedule';
 import { useMoodiPanel } from '../shell/MoodiPanel';
@@ -50,11 +51,10 @@ export function TodayMoodActions({ refreshKey }: { refreshKey: number }) {
   return <>
     {loading ? <ActivityIndicator accessibilityLabel="Loading active actions" /> : null}
     {error ? <Card><Text accessibilityRole="alert" style={typography.error}>{error}</Text><Button label="Retry actions" secondary onPress={() => void refresh()} /></Card> : null}
-    {items.map(({ action, draft }) => <Card key={action.id}>
-      <Text style={typography.heading}>Record mood</Text>
-      <Text style={typography.body}>{measurementLabels(action.settings.what_to_record)}</Text>
-      {draft ? <Text style={typography.body}>Unfinished entry · {new Date(draft.values.entry_time).toLocaleDateString()}</Text> : null}
-      <Button label={draft ? 'Resume check-in' : 'Record mood'} onPress={() => void open(action)} />
-    </Card>)}
+    {items.map(({ action, draft }) => <TodoRow key={action.id} kind="mood"
+      title={draft ? 'Resume mood check-in' : 'Record mood'}
+      subtitle={draft ? draft.values.mood_value !== null ? `Mood saved · ${draft.values.mood_value}/10` : 'Continue your check-in'
+        : action.settings.preferred_check_in_time ? `Reminder at ${formatClockTime(action.settings.preferred_check_in_time)}` : 'Check in with your mood'}
+      onPress={() => void open(action)} />)}
   </>;
 }
