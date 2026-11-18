@@ -12,6 +12,7 @@ import { useSharedRecordingLibrary } from '../recordings/RecordingLibraryProvide
 import { useMoodiPanel } from '../shell/MoodiPanel';
 import { completedMoodTimeline } from './completedMoodTimeline';
 import { sessionDate, sessionStatus, sortedSessions } from './sessionPresentation';
+import { DemoResetButton } from '../shell/DemoResetButton';
 
 function CompletedActions({ period, entries, onSelect, initiallyOpen = false }: {
   period: string; entries: RatingEntry[]; onSelect: (entry: RatingEntry) => void; initiallyOpen?: boolean;
@@ -38,7 +39,7 @@ function CompletedActions({ period, entries, onSelect, initiallyOpen = false }: 
 
 export function JourneyScreen() {
   const library = useSharedRecordingLibrary();
-  const { setOpen } = useMoodiPanel();
+  const { setOpen, entryVersion } = useMoodiPanel();
   const router = useRouter();
   const [entries, setEntries] = useState<RatingEntry[]>([]);
   const [selected, setSelected] = useState<RatingEntry | null>(null);
@@ -47,8 +48,10 @@ export function JourneyScreen() {
   const [retry, setRetry] = useState(0);
   useFocusEffect(useCallback(() => {
     void retry;
+    void entryVersion;
     let active = true;
     setActionsLoading(true);
+    setEntries([]);
     const load = async () => {
       try {
         const actions = await listRatingActions();
@@ -60,12 +63,12 @@ export function JourneyScreen() {
     };
     void load();
     return () => { active = false; };
-  }, [retry]));
+  }, [retry, entryVersion]));
   const sessions = sortedSessions(library.recordings);
   const groups = completedMoodTimeline(sessions, entries);
   const shortDate = (index: number) => sessionDate(sessions[index]).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   return <Page>
-    <Text style={typography.title}>Journey</Text>
+    <View style={styles.screenHeader}><Text style={typography.title}>Journey</Text><DemoResetButton /></View>
     {library.isLoading ? <ActivityIndicator accessibilityLabel="Loading sessions" color={theme.colors.accent} /> : null}
     {actionsLoading ? <ActivityIndicator accessibilityLabel="Loading completed actions" color={theme.colors.accent} /> : null}
     {actionsError ? <Card><Text style={typography.error}>{actionsError}</Text><Button secondary label="Retry completed actions" onPress={() => setRetry(value => value + 1)} /></Card> : null}
@@ -104,6 +107,7 @@ export function JourneyScreen() {
   </Page>;
 }
 const styles = StyleSheet.create({
+  screenHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
   timeline: { marginLeft: 6, borderLeftWidth: 1, borderLeftColor: theme.colors.line },
   session: { paddingLeft: 12, position: 'relative' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.line, backgroundColor: theme.colors.surface, minHeight: 64 },

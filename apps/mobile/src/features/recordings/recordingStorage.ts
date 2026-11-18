@@ -296,3 +296,10 @@ export async function deletePersistedRecording(recording: RecordingMetadata) {
   const existing = await loadRecordings();
   await writeIndex(existing.filter((item) => item.id !== recording.id));
 }
+
+export function clearPersistedRecordings() {
+  if (recordingsDirectory.exists) {
+    recordingsDirectory.delete();
+  }
+  ensureRecordingsDirectory();
+}

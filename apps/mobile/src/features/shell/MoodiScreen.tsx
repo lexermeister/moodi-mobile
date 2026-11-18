@@ -1,17 +1,21 @@
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Page, typography } from '@/ui/components';
 import { useSharedRecordingLibrary } from '../recordings/RecordingLibraryProvider';
 import { useMoodiPanel } from './MoodiPanel';
 import { RecentMoodChart } from './RecentMoodChart';
 import { TodayMoodActions } from '../actions/TodayMoodActions';
 import { MoodEntriesSection } from '../actions/MoodEntriesSection';
+import { DemoResetButton } from './DemoResetButton';
 
 export function MoodiScreen() {
   const { setOpen, entryVersion } = useMoodiPanel();
   const library = useSharedRecordingLibrary();
   return <Page>
-    <View><Text style={typography.body}>{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
-      <Text style={typography.title}>Today</Text></View>
+    <View style={styles.header}>
+      <View style={styles.heading}><Text style={typography.body}>{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
+        <Text style={typography.title}>Today</Text></View>
+      <DemoResetButton />
+    </View>
     <Text style={typography.heading}>To do</Text>
     <TodayMoodActions refreshKey={entryVersion} />
     <Card><Text style={typography.heading}>{library.isRecording ? 'Session in progress' : 'A space for your session'}</Text>
@@ -21,3 +25,8 @@ export function MoodiScreen() {
     <MoodEntriesSection refreshKey={entryVersion} />
   </Page>;
 }
+
+const styles = StyleSheet.create({
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
+  heading: { flex: 1 },
+});

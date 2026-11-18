@@ -62,6 +62,7 @@ export function MoodEntriesSection({ refreshKey }: { refreshKey: number }) {
     void retry;
     let active = true;
     setLoading(true);
+    setEntries([]);
     const load = async () => {
       try {
         const actions = await listRatingActions();

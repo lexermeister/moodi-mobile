@@ -16,11 +16,13 @@ import { AppState, Linking } from 'react-native';
 
 import {
   generateSessionInsights,
+  restartDemoBackend,
   saveSessionInsightsReview,
   transcribeRecording,
   uploadRecording,
 } from './recordingApi';
 import {
+  clearPersistedRecordings,
   deletePersistedRecording,
   getRecordingUri,
   loadRecordings,
@@ -81,6 +83,7 @@ export function useRecordingLibrary() {
   const phaseRef = useRef<Phase>('idle');
   const [recordings, setRecordings] = useState<RecordingMetadata[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRestartingDemo, setIsRestartingDemo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -95,6 +98,7 @@ export function useRecordingLibrary() {
   const busyRef = useRef(false);
   const playbackBusyRef = useRef(false);
   const processingIdsRef = useRef(new Set<string>());
+  const resettingDemoRef = useRef(false);
   const startCancelledRef = useRef(false);
   const startedAtRef = useRef<Date | null>(null);
 
@@ -161,7 +165,7 @@ export function useRecordingLibrary() {
 
   const processRecording = useCallback(
     async (recording: RecordingMetadata) => {
-      if (processingIdsRef.current.has(recording.id)) {
+      if (resettingDemoRef.current || processingIdsRef.current.has(recording.id)) {
         return;
       }
 
@@ -291,6 +295,7 @@ export function useRecordingLibrary() {
   const startRecording = useCallback(async () => {
     if (
       busyRef.current ||
+      resettingDemoRef.current ||
       playbackBusyRef.current ||
       phaseRef.current !== 'idle' ||
       AppState.currentState !== 'active'
@@ -380,7 +385,7 @@ export function useRecordingLibrary() {
 
   const togglePlayback = useCallback(
     async (recording: RecordingMetadata) => {
-      if (phaseRef.current !== 'idle' || busyRef.current || playbackBusyRef.current) {
+      if (phaseRef.current !== 'idle' || busyRef.current || playbackBusyRef.current || resettingDemoRef.current) {
         return;
       }
 
@@ -445,6 +450,26 @@ export function useRecordingLibrary() {
     },
     [playingId, stopPlayback],
   );
+
+  const restartDemo = useCallback(async () => {
+    if (isLoading || resettingDemoRef.current || phaseRef.current !== 'idle' || busyRef.current || processingIdsRef.current.size > 0) {
+      throw new Error('Wait for the recording or session processing to finish before restarting the demo.');
+    }
+    resettingDemoRef.current = true;
+    setIsRestartingDemo(true);
+    try {
+      await stopPlayback();
+      await restartDemoBackend();
+      clearPersistedRecordings();
+      setRecordings([]);
+      setPendingReviewId(null);
+      setError(null);
+      setNotice(null);
+    } finally {
+      resettingDemoRef.current = false;
+      setIsRestartingDemo(false);
+    }
+  }, [isLoading, stopPlayback]);
 
   const generateInsights = useCallback(
     (recording: RecordingMetadata) => {
@@ -597,9 +622,10 @@ export function useRecordingLibrary() {
     deleteRecording,
     durationMs: recorderState.durationMillis,
     error,
-    isBusy: phase === 'starting' || phase === 'stopping',
+    isBusy: phase === 'starting' || phase === 'stopping' || isRestartingDemo,
     isLoading,
     isRecording: phase === 'recording',
+    isRestartingDemo,
     isStarting: phase === 'starting',
     notice,
     openSettings: Linking.openSettings,
@@ -607,6 +633,7 @@ export function useRecordingLibrary() {
     pendingReviewId,
     playingId: playerStatus.playing ? playingId : null,
     recordings,
+    restartDemo,
     generateInsights,
     saveInsightsReview,
     shareRecording,

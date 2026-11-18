@@ -20,6 +20,7 @@ export function TodayMoodActions({ refreshKey }: { refreshKey: number }) {
   const refresh = useCallback(async () => {
     const version = ++request.current;
     setLoading(true);
+    setItems([]);
     try {
       const actions = (await listRatingActions()).filter(action => action.state === 'active' && isMoodActionDue(action));
       const rows = await Promise.all(actions.map(async action => {

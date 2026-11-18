@@ -20,6 +20,7 @@ type PanelState = {
   moodSession: MoodSession | null;
   openMoodCheckIn: (session: MoodSession) => void;
   closeMoodCheckIn: () => void;
+  resetPanel: () => void;
   entryVersion: number;
 };
 const PanelContext = createContext<PanelState | null>(null);
@@ -29,7 +30,8 @@ export function MoodiPanelProvider({ children }: PropsWithChildren) {
   const [entryVersion, setEntryVersion] = useState(0);
   const openMoodCheckIn = (session: MoodSession) => { setMoodSession(current => current ?? session); setOpen(true); };
   const closeMoodCheckIn = () => { setMoodSession(null); setOpen(false); setEntryVersion(value => value + 1); };
-  return <PanelContext.Provider value={{ open, setOpen, moodSession, openMoodCheckIn, closeMoodCheckIn, entryVersion }}>{children}</PanelContext.Provider>;
+  const resetPanel = () => { setMoodSession(null); setOpen(false); setEntryVersion(value => value + 1); };
+  return <PanelContext.Provider value={{ open, setOpen, moodSession, openMoodCheckIn, closeMoodCheckIn, resetPanel, entryVersion }}>{children}</PanelContext.Provider>;
 }
 export function useMoodiPanel() {
   const value = useContext(PanelContext);
