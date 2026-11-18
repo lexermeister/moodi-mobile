@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MoodiWave } from '@/ui/MoodiWave';
 import { measurementLabels } from '../actions/moodSetup';
 import { confirmActionReviews, getActionReviewConfirmation, getRatingCandidateResolution, type ActionReviewConfirmation } from '../actions/actionsApi';
 import { RecordMoodSetupCard, type RecordMoodSessionState } from '../actions/RecordMoodSetupCard';
 import type { RecordingMetadata } from '../recordings/recordingStorage';
 import { useSharedRecordingLibrary } from '../recordings/RecordingLibraryProvider';
-import { sessionDate } from './sessionPresentation';
+import { isProcessing, sessionDate, sessionProcessingMessage } from './sessionPresentation';
 import { recordMoodCandidates, summaryReviewRequest } from './sessionReviewDomain';
 
 type Step = 'review' | 'mood';
@@ -22,6 +22,8 @@ export function JourneySummary({ recording, onClose }: { recording: RecordingMet
   const [error, setError] = useState<string | null>(null);
   const library = useSharedRecordingLibrary();
   const insights = recording.sessionInsights;
+  const processing = recording.processingStatus === 'local' || isProcessing(recording);
+  const processingFailed = recording.processingStatus === 'failed';
   const review = recording.sessionInsightsReview?.draft_id === insights?.draft_id &&
     recording.sessionInsightsReview?.source_version === insights?.source_version
     ? recording.sessionInsightsReview : undefined;
@@ -33,6 +35,9 @@ export function JourneySummary({ recording, onClose }: { recording: RecordingMet
     key: section.key, heading: section.heading, bullets: section.bullets.map(item => item.text),
   })) ?? [];
   const candidates = useMemo(() => recordMoodCandidates(insights), [insights]);
+  const intro = !insights ? 'Your session summary will appear here when it’s ready.'
+    : candidates.length ? `Take a look at the summary. I pulled out ${candidates.length === 1 ? 'one action' : `${candidates.length} actions`} you agreed to try.`
+      : 'Take a look at the summary. Review what we discussed.';
   const selected = candidates.find(candidate => candidate.id === selectedId);
   const reviewRequest = summaryReviewRequest(insights);
   const candidateKey = candidates.map(candidate => candidate.id).join('|');
@@ -102,13 +107,26 @@ export function JourneySummary({ recording, onClose }: { recording: RecordingMet
 
   return <View style={styles.panel}>
     <Text style={styles.brand}>Moodi</Text>
+    {step === 'review' && (processing || processingFailed) ? <View accessibilityLiveRegion="polite"
+      style={[styles.statusCard, processingFailed && styles.failedStatusCard]}>
+      {processing ? <ActivityIndicator accessibilityLabel="Processing session" color="#C9B7FF" size="small" /> : null}
+      <View style={styles.statusCopy}>
+        <Text style={styles.statusTitle}>{processingFailed ? 'Session processing stopped' : 'Preparing your session'}</Text>
+        <Text style={styles.statusText}>{sessionProcessingMessage(recording)}</Text>
+      </View>
+      {processingFailed ? <Pressable accessibilityRole="button" accessibilityLabel="Retry session processing"
+        disabled={library.isRecording || library.isBusy} onPress={() => library.generateInsights(recording)}
+        style={[styles.retryButton, (library.isRecording || library.isBusy) && styles.disabled]}>
+        <Text style={styles.retryText}>Retry</Text>
+      </Pressable> : null}
+    </View> : null}
     {step === 'mood' ? <Pressable accessibilityRole="button" onPress={() => setStep('review')} style={styles.back}>
       <Text style={styles.backText}>‹  Back</Text>
     </Pressable> : null}
-    <ScrollView key={step} nestedScrollEnabled contentContainerStyle={styles.content}>
+    <ScrollView key={step} nestedScrollEnabled style={styles.scroll} contentContainerStyle={styles.content}>
       {step === 'review' ? <>
         <Text accessibilityRole="header" style={styles.title}>Here’s what I heard</Text>
-        <Text style={styles.intro}>Take a look at the summary. {candidates.length ? `I pulled out ${candidates.length === 1 ? 'one action' : `${candidates.length} actions`} you agreed to try.` : 'Review what we discussed.'}</Text>
+        <Text style={styles.intro}>{intro}</Text>
         <View style={styles.summaryCard}>
           <View style={styles.cardHeader}><Text style={styles.cardLabel}>SESSION SUMMARY · {sessionDate(recording).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()}</Text>
             {insights ? <Text style={styles.badge}>{review ? 'Reviewed' : insights.result.status === 'insufficient_source' ? 'Limited' : 'Draft'}</Text> : null}</View>
@@ -155,6 +173,16 @@ export function JourneySummary({ recording, onClose }: { recording: RecordingMet
 const styles = StyleSheet.create({
   panel: { height: 430, borderRadius: 22, padding: 16, gap: 12, backgroundColor: '#24222B' },
   brand: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
+  statusCard: { minHeight: 62, borderRadius: 12, borderWidth: 1, borderColor: '#655A86',
+    backgroundColor: '#383249', flexDirection: 'row', alignItems: 'center', gap: 12, padding: 11 },
+  failedStatusCard: { borderColor: '#84575D', backgroundColor: '#3D3039' },
+  statusCopy: { flex: 1, gap: 3 },
+  statusTitle: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
+  statusText: { color: '#D4D0DD', fontSize: 12, lineHeight: 17 },
+  retryButton: { minHeight: 36, borderRadius: 9, backgroundColor: '#C9B7FF', paddingHorizontal: 12,
+    alignItems: 'center', justifyContent: 'center' },
+  retryText: { color: '#272032', fontSize: 12, fontWeight: '800' },
+  scroll: { flex: 1 },
   back: { minHeight: 35, justifyContent: 'center' }, backText: { color: '#C9B7FF', fontSize: 13, fontWeight: '700' },
   content: { gap: 14, paddingBottom: 8 }, title: { color: '#FFFFFF', fontSize: 26, fontWeight: '800', letterSpacing: -0.7 },
   intro: { color: '#D4D0DD', fontSize: 14, lineHeight: 22 }, body: { color: '#D4D0DD', fontSize: 14, lineHeight: 22 },
