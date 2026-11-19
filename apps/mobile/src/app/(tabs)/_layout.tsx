@@ -2,11 +2,13 @@ import { Tabs } from 'expo-router';
 import { Image, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MoodiPanel } from '@/features/shell/MoodiPanel';
+import { MoodiHeader } from '@/features/shell/MoodiHeader';
 import { theme } from '@/ui/theme';
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   return <View style={styles.root}>
+    <View style={[styles.headerArea, { paddingTop: insets.top }]}><MoodiHeader /></View>
     <Tabs screenOptions={{ headerShown: false,
       tabBarActiveTintColor: theme.colors.accent, tabBarInactiveTintColor: theme.colors.muted,
       tabBarStyle: { height: 64 + insets.bottom, paddingTop: 8, paddingBottom: insets.bottom + 4, borderTopColor: theme.colors.line, backgroundColor: theme.colors.surface },
@@ -19,4 +21,8 @@ export default function TabLayout() {
     <MoodiPanel />
   </View>;
 }
-const styles = StyleSheet.create({ root: { flex: 1 }, icon: { width: 21, height: 21 } });
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.background },
+  headerArea: { backgroundColor: '#F8F7FB' },
+  icon: { width: 21, height: 21 },
+});

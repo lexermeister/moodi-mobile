@@ -1,4 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Page, typography } from '@/ui/components';
 import { theme } from '@/ui/theme';
@@ -12,7 +13,6 @@ import { useSharedRecordingLibrary } from '../recordings/RecordingLibraryProvide
 import { useMoodiPanel } from '../shell/MoodiPanel';
 import { completedMoodTimeline } from './completedMoodTimeline';
 import { sessionDate, sessionStatus, sortedSessions } from './sessionPresentation';
-import { DemoResetButton } from '../shell/DemoResetButton';
 import { useSessionReviewStatus } from './useSessionReviewStatus';
 
 function CompletedActions({ period, entries, onSelect, initiallyOpen = false }: {
@@ -70,7 +70,7 @@ export function JourneyScreen() {
   const groups = completedMoodTimeline(sessions, entries);
   const shortDate = (index: number) => sessionDate(sessions[index]).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   return <Page>
-    <View style={styles.screenHeader}><Text style={typography.title}>Journey</Text><DemoResetButton /></View>
+    <Text style={typography.title}>Journey</Text>
     {library.isLoading ? <ActivityIndicator accessibilityLabel="Loading sessions" color={theme.colors.accent} /> : null}
     {actionsLoading ? <ActivityIndicator accessibilityLabel="Loading completed actions" color={theme.colors.accent} /> : null}
     {actionsError ? <Card><Text style={typography.error}>{actionsError}</Text><Button secondary label="Retry completed actions" onPress={() => setRetry(value => value + 1)} /></Card> : null}
@@ -97,7 +97,10 @@ export function JourneyScreen() {
       accessibilityLabel={`${sessionDate(recording).toLocaleDateString(undefined, { dateStyle: 'long' })}, ${status}`}
       onPress={() => router.push({ pathname: '/journey/session/[id]', params: { id: recording.id } })}
       style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}>
-      <View style={[styles.iconBox, index === 0 && styles.recentIcon]}><Text style={styles.documentIcon}>▤</Text></View>
+      <View style={[styles.iconBox, index === 0 && styles.recentIcon]}>
+        <SymbolView name={{ ios: 'doc.text', android: 'description', web: 'description' }} size={22}
+          tintColor={index === 0 ? '#287453' : '#706D7B'} />
+      </View>
       <View style={styles.copy}><Text style={styles.date}>{sessionDate(recording).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', ...(sessionDate(recording).getFullYear() !== new Date().getFullYear() ? { year: 'numeric' as const } : {}) })}</Text>
         <Text style={styles.subtitle}><Text style={styles.sessionLabel}>{index === 0 ? 'Most recent session' : 'Past session'}</Text> · {new Date(recording.createdAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</Text>
         {['Processing', 'Needs retry', 'Needs review', 'Checking review status', 'Review status unavailable'].includes(status) ? <Text style={styles.status}>{status}</Text> : null}</View>
@@ -113,7 +116,6 @@ export function JourneyScreen() {
   </Page>;
 }
 const styles = StyleSheet.create({
-  screenHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
   timeline: { marginLeft: 6, borderLeftWidth: 1, borderLeftColor: theme.colors.line },
   session: { paddingLeft: 12, position: 'relative' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.line, backgroundColor: theme.colors.surface, minHeight: 64 },
@@ -122,7 +124,6 @@ const styles = StyleSheet.create({
   activeDot: { borderColor: theme.colors.accent, backgroundColor: theme.colors.accent },
   iconBox: { width: 34, height: 36, borderRadius: 10, backgroundColor: '#F0EFF4', alignItems: 'center', justifyContent: 'center' },
   recentIcon: { backgroundColor: '#E5F4ED' },
-  documentIcon: { fontSize: 20, color: '#749083' },
   date: { fontSize: 15, fontWeight: '700', color: theme.colors.ink },
   subtitle: { fontSize: 12, lineHeight: 18, color: theme.colors.muted },
   sessionLabel: { fontWeight: '600' },

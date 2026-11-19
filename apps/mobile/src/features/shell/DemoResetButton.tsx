@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SymbolView } from 'expo-symbols';
 import { Alert, Pressable, StyleSheet, Text } from 'react-native';
 import { useSharedRecordingLibrary } from '../recordings/RecordingLibraryProvider';
 import { useMoodiPanel } from './MoodiPanel';
@@ -42,12 +43,16 @@ export function DemoResetButton() {
   const disabled = busy || library.isRestartingDemo;
   return <Pressable accessibilityRole="button" accessibilityLabel="Restart demo" disabled={disabled}
     onPress={confirmRestart} style={[styles.button, disabled && styles.busy]}>
+    <SymbolView name={{ ios: 'arrow.counterclockwise', android: 'refresh', web: 'refresh' }}
+      size={15} tintColor={theme.colors.muted} />
     <Text style={styles.label}>{disabled ? 'Restarting…' : 'Restart demo'}</Text>
   </Pressable>;
 }
 
 const styles = StyleSheet.create({
-  button: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.line },
-  label: { color: theme.colors.accent, fontSize: 12, fontWeight: '700' },
+  button: { minHeight: 40, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: 6,
+    paddingHorizontal: 11, paddingVertical: 8, borderRadius: 10, borderWidth: 1,
+    borderColor: theme.colors.line, backgroundColor: '#FCFBFE' },
+  label: { color: theme.colors.muted, fontSize: 12, fontWeight: '700' },
   busy: { opacity: 0.5 },
 });

@@ -16,14 +16,14 @@ type Props = {
   draftId?: string;
   sourceVersion?: string;
   onSessionStateChange?: (status: RecordMoodSessionState) => void;
-  onActivated?: () => void;
+  onResolved?: () => void;
 };
 
 export function RecordMoodSetupCard(props: Props) {
   return <RecordMoodSetupForm key={`${props.recordingId}:${props.draftId}:${props.sourceVersion}:${props.candidate.id}`} {...props} />;
 }
 
-function RecordMoodSetupForm({ candidate, recordingId, draftId, sourceVersion, onSessionStateChange, onActivated }: Props) {
+function RecordMoodSetupForm({ candidate, recordingId, draftId, sourceVersion, onSessionStateChange, onResolved }: Props) {
   const hasSource = Boolean(recordingId && draftId && sourceVersion);
   const [measurements, setMeasurements] = useState<MoodMeasurement[]>(candidate.what_to_record ?? ['mood']);
   const [cadence, setCadence] = useState<MoodCadence>(suggestedCadence(candidate.frequency));
@@ -72,7 +72,7 @@ function RecordMoodSetupForm({ candidate, recordingId, draftId, sourceVersion, o
       const nextStatus = result.disposition === 'rejected' ? 'not_added' : result.disposition === 'linked_existing' ? 'linked_existing' : 'active';
       setStatus(nextStatus);
       onSessionStateChange?.(nextStatus);
-      if (result.disposition !== 'rejected') onActivated?.();
+      onResolved?.();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save this action.');
     } finally {
@@ -138,9 +138,15 @@ function RecordMoodSetupForm({ candidate, recordingId, draftId, sourceVersion, o
       </View> : null}
       {!EXACT_TIME.test(reminderTime) || (cadence === 'weekly' && weeklyWeekday === null) ? <Text style={styles.hint}>Choose an exact reminder time{cadence === 'weekly' ? ' and weekday' : ''} to activate this action.</Text> : null}
       {status !== 'error' ? <View style={styles.buttons}>
-        <Pressable accessibilityRole="button" disabled={busy || !canSave} onPress={() => void submit('activate')}
+        <Pressable accessibilityRole="button" accessibilityLabel="Activate Record mood action"
+          disabled={busy || !canSave} onPress={() => void submit('activate')}
           style={[styles.primary, (busy || !canSave) && styles.disabled]}>
           <Text style={styles.selectedText}>{busy ? 'Saving…' : 'Activate'}</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Reject Record mood action"
+          disabled={busy} onPress={() => void submit('reject')}
+          style={[styles.rejectButton, busy && styles.disabled]}>
+          <Text style={styles.rejectText}>Reject</Text>
         </Pressable>
       </View> : null}
     </>}
@@ -172,8 +178,12 @@ const styles = StyleSheet.create({
   choice: { minHeight: 44, justifyContent: 'center', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: '#403B4B' },
   selected: { backgroundColor: '#6C55B2' }, choiceText: { color: '#FFFFFF', fontWeight: '600' },
   selectedText: { color: '#272032', fontWeight: '700' },
-  buttons: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  primary: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', padding: 14, borderRadius: 12, backgroundColor: '#C9B7FF' },
+  buttons: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 12 },
+  primary: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12,
+    paddingVertical: 10, borderRadius: 12, backgroundColor: '#C9B7FF' },
+  rejectButton: { minWidth: 84, minHeight: 48, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 10, borderRadius: 12, borderWidth: 1, borderColor: '#55515F', backgroundColor: '#2E2B36' },
+  rejectText: { color: '#D4D0DD', fontSize: 13, fontWeight: '700' },
   secondary: { padding: 14, borderRadius: 12, backgroundColor: '#403B4B' },
   disabled: { opacity: 0.5 }, success: { color: '#BFE8CB', fontWeight: '600' }, error: { color: '#FFB4AB' },
 });

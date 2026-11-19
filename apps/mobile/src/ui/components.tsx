@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from './theme';
 
 export function Page({ children }: PropsWithChildren) {
-  return <SafeAreaView style={styles.page} edges={['top', 'left', 'right']}>
+  return <SafeAreaView style={styles.page} edges={['left', 'right']}>
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">{children}</ScrollView>
   </SafeAreaView>;
 }

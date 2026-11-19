@@ -147,7 +147,7 @@ export function ActionsScreen() {
   const completed = overviews.filter(({ action }) => getActionProgress(action).completed);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
