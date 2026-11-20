@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { getActivityCandidateResolution, reviewActivityCandidate } from './actionsApi';
 import type { ActivityCandidate, ActivitySettings } from './activityTypes';
+import { activityAgreementText } from './activityFlowDomain';
 
 export type ActivityReviewState = 'loading' | 'needs_setup' | 'active' | 'not_added' | 'error';
 type Props = { candidate: ActivityCandidate; recordingId?: string; draftId?: string;
@@ -9,7 +10,6 @@ type Props = { candidate: ActivityCandidate; recordingId?: string; draftId?: str
   onResolved?: () => void; onViewSource?: () => void };
 
 const activityTitle = 'Do an enjoyable or meaningful activity';
-const generalCopy = 'You agreed to make time for one thing you enjoy or find meaningful this week. You can decide what it is when you’re ready.';
 const clock = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 function optional(value: string) { return value.trim() || null; }
 
@@ -60,11 +60,7 @@ export function ActivitySetupCard({ candidate, recordingId, draftId, sourceVersi
     <Text style={styles.body}>Does this match what you agreed to?</Text>
     <View style={styles.agreement}>
       <Text style={styles.badge}>{status === 'active' ? 'Active' : status === 'not_added' ? 'Not added' : 'Agreed in session'}</Text>
-      <Text style={styles.agreementText}>{candidate.assignment_kind === 'general'
-        ? (candidate.reference_period?.toLowerCase().includes('this week') || candidate.frequency?.toLowerCase().includes('this week')
-          ? generalCopy
-          : `You agreed to ${candidate.exact_task}. You can decide what it is when you’re ready.`) :
-        `You agreed to ${candidate.agreed_activity}${candidate.frequency ? ` · ${candidate.frequency}` : ''}.`}</Text>
+      <Text style={styles.agreementText}>{activityAgreementText(candidate)}</Text>
       {onViewSource ? <Pressable accessibilityRole="button" onPress={onViewSource}>
         <Text style={styles.source}>View transcript · {candidate.source_ids.join(', ')}</Text>
       </Pressable> : <Text style={styles.source}>From transcript {candidate.source_ids.join(', ')}</Text>}

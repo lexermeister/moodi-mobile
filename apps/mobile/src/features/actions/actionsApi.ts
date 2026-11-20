@@ -9,7 +9,9 @@ import {
   type RatingEntryValues,
   type RecordRatingActionSettings,
 } from './actionTypes';
-import { isActivityAction, type ActivityAction, type ActivitySettings } from './activityTypes';
+import { isActivityAction, isActivityAttempt, isActivitySuggestion,
+  type ActivityAction, type ActivityAttempt, type ActivityAttemptData,
+  type ActivitySettings, type ActivitySuggestion } from './activityTypes';
 
 class ActionsApiError extends Error {
   constructor(
@@ -82,6 +84,43 @@ export async function listRatingActions(recordingId?: string): Promise<RatingAct
 
 export async function listActivityActions(recordingId?: string): Promise<ActivityAction[]> {
   return (await listActions(recordingId)).filter(isActivityAction);
+}
+
+export async function getActivityAction(actionId: string): Promise<ActivityAction> {
+  const payload = await requestJson(`/actions/${encodeURIComponent(actionId)}`);
+  if (!isActivityAction(payload)) throw new ActionsApiError('Invalid activity Action.');
+  return payload;
+}
+
+export async function listActivitySuggestions(actionId: string): Promise<ActivitySuggestion[]> {
+  const payload = await requestJson(`/actions/${encodeURIComponent(actionId)}/activity-suggestions`);
+  if (!payload || typeof payload !== 'object' ||
+    !Array.isArray((payload as { suggestions?: unknown }).suggestions) ||
+    !(payload as { suggestions: unknown[] }).suggestions.every(isActivitySuggestion)) {
+    throw new ActionsApiError('Invalid activity suggestions.');
+  }
+  return (payload as { suggestions: ActivitySuggestion[] }).suggestions;
+}
+
+export async function listActivityAttempts(actionId: string): Promise<ActivityAttempt[]> {
+  const payload = await requestJson(`/actions/${encodeURIComponent(actionId)}/activity-attempts`);
+  if (!payload || typeof payload !== 'object' ||
+    !Array.isArray((payload as { attempts?: unknown }).attempts) ||
+    !(payload as { attempts: unknown[] }).attempts.every(isActivityAttempt)) {
+    throw new ActionsApiError('Invalid activity history.');
+  }
+  return (payload as { attempts: ActivityAttempt[] }).attempts;
+}
+
+export async function saveActivityAttempt(actionId: string, attemptId: string,
+  actionRevision: number, expectedRevision: number, data: ActivityAttemptData): Promise<ActivityAttempt> {
+  const payload = await requestJson(
+    `/actions/${encodeURIComponent(actionId)}/activity-attempts/${encodeURIComponent(attemptId)}`,
+    { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...data, action_revision: actionRevision, expected_revision: expectedRevision }) },
+  );
+  if (!isActivityAttempt(payload)) throw new ActionsApiError('Invalid saved activity attempt.');
+  return payload;
 }
 
 export async function reviewActivityCandidate({ recordingId, candidateId, draftId, sourceVersion,

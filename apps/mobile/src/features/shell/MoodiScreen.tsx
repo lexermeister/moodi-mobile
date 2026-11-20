@@ -20,7 +20,7 @@ export function MoodiScreen() {
       {recordingActive ? <TodoRow kind="recording" title="Recording session"
         subtitle="Open Moodi to see the session" onPress={() => setOpen(true)} /> : <ReviewSessionTodo />}
       <TodayMoodActions refreshKey={entryVersion} />
-      <TodayActivityActions />
+      <TodayActivityActions refreshKey={entryVersion} />
     </View>
     <RecentMoodChart key={entryVersion} />
     <MoodEntriesSection refreshKey={entryVersion} />
