@@ -5,36 +5,48 @@ import { Button, Card, Page, typography } from '@/ui/components';
 import { theme } from '@/ui/theme';
 import { MoodiWave } from '@/ui/MoodiWave';
 import { useCallback, useState } from 'react';
-import { listRatingActions, listRatingEntries } from '../actions/actionsApi';
+import { listActivityActions, listActivityAttempts, listRatingActions, listRatingEntries } from '../actions/actionsApi';
 import type { RatingEntry } from '../actions/actionTypes';
+import type { ActivityAttempt } from '../actions/activityTypes';
+import { outcomeLabels } from '../actions/activityFlowDomain';
 import { MoodEntryDetail } from '../actions/MoodEntriesSection';
 import { entryTimeLabel } from '../actions/moodEntryPresentation';
 import { useSharedRecordingLibrary } from '../recordings/RecordingLibraryProvider';
 import { useMoodiPanel } from '../shell/MoodiPanel';
-import { completedMoodTimeline } from './completedMoodTimeline';
+import { ActivityAttemptDetail } from './ActivityAttemptDetail';
+import { completedActionTimeline, type JourneyActionEntry } from './completedActionTimeline';
 import { sessionDate, sessionStatus, sortedSessions } from './sessionPresentation';
 import { useSessionReviewStatus } from './useSessionReviewStatus';
 
-function CompletedActions({ period, entries, onSelect, initiallyOpen = false }: {
-  period: string; entries: RatingEntry[]; onSelect: (entry: RatingEntry) => void; initiallyOpen?: boolean;
+function RecordedActions({ period, entries, onSelect, initiallyOpen = false }: {
+  period: string; entries: JourneyActionEntry[]; onSelect: (entry: JourneyActionEntry) => void; initiallyOpen?: boolean;
 }) {
   const [open, setOpen] = useState(initiallyOpen);
   return <View style={styles.actions}>
     <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }}
       onPress={() => setOpen(!open)} style={styles.actionsHeader}>
       <Text style={styles.disclosure}>{open ? '⌄' : '›'}</Text>
-      <View style={styles.copy}><Text style={styles.actionsTitle}>Completed actions</Text>
+      <View style={styles.copy}><Text style={styles.actionsTitle}>Recorded actions</Text>
         <Text style={styles.period}>{period}</Text></View>
       <Text style={styles.count}>{entries.length}</Text>
     </Pressable>
-    {open ? entries.length ? entries.map(entry => <Pressable key={entry.id} accessibilityRole="button"
-      accessibilityLabel={`Mood check-in, ${entry.values.mood_value} out of 10, ${entryTimeLabel(entry)}`}
-      onPress={() => onSelect(entry)} style={({ pressed }) => [styles.actionRow, pressed && { opacity: 0.6 }]}>
+    {open ? entries.length ? entries.map(item => item.kind === 'mood' ? <Pressable key={item.id} accessibilityRole="button"
+      accessibilityLabel={`Mood check-in, ${item.entry.values.mood_value} out of 10, ${entryTimeLabel(item.entry)}`}
+      onPress={() => onSelect(item)} style={({ pressed }) => [styles.actionRow, pressed && { opacity: 0.6 }]}>
       <View style={styles.moodIcon}><MoodiWave color={theme.colors.accent} width={20} /></View>
       <View style={styles.copy}><Text style={styles.actionName}>Mood check-in</Text>
-        <Text style={styles.period}>{entryTimeLabel(entry)}</Text></View>
-      <Text style={styles.actionScore}>{entry.values.mood_value}<Text style={styles.actionOutOf}>/10</Text></Text>
-    </Pressable>) : <Text style={styles.emptyActions}>No completed actions in this period.</Text> : null}
+        <Text style={styles.period}>{entryTimeLabel(item.entry)}</Text></View>
+      <Text style={styles.actionScore}>{item.entry.values.mood_value}<Text style={styles.actionOutOf}>/10</Text></Text>
+    </Pressable> : <Pressable key={item.id} accessibilityRole="button"
+      accessibilityLabel={`${item.attempt.selection.label}, ${outcomeLabels[item.attempt.outcome!]}, ${new Date(item.occurredAt).toLocaleString()}`}
+      onPress={() => onSelect(item)} style={({ pressed }) => [styles.actionRow, pressed && { opacity: 0.6 }]}>
+      <View style={styles.activityIcon}><SymbolView name={{ ios: 'heart', android: 'favorite', web: 'favorite' }}
+        size={22} tintColor="#7B4D73" /></View>
+      <View style={styles.copy}><Text style={styles.actionName} numberOfLines={2}>{item.attempt.selection.label}</Text>
+        <Text style={styles.period}>Enjoyable activity · {new Date(item.occurredAt).toLocaleString(undefined,
+          { dateStyle: 'medium', timeStyle: 'short' })}</Text></View>
+      <Text style={styles.actionOutcome}>{outcomeLabels[item.attempt.outcome!]}</Text>
+    </Pressable>) : <Text style={styles.emptyActions}>No recorded actions in this period.</Text> : null}
   </View>;
 }
 
@@ -43,7 +55,8 @@ export function JourneyScreen() {
   const { setOpen, entryVersion } = useMoodiPanel();
   const router = useRouter();
   const [entries, setEntries] = useState<RatingEntry[]>([]);
-  const [selected, setSelected] = useState<RatingEntry | null>(null);
+  const [activityAttempts, setActivityAttempts] = useState<ActivityAttempt[]>([]);
+  const [selected, setSelected] = useState<JourneyActionEntry | null>(null);
   const [actionsLoading, setActionsLoading] = useState(true);
   const [actionsError, setActionsError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
@@ -53,13 +66,27 @@ export function JourneyScreen() {
     let active = true;
     setActionsLoading(true);
     setEntries([]);
+    setActivityAttempts([]);
     const load = async () => {
       try {
-        const actions = await listRatingActions();
-        const rows = await Promise.all(actions.map(action => listRatingEntries(action.id)));
-        if (active) { setEntries(rows.flat()); setActionsError(null); }
+        const [ratingActionsResult, activityActionsResult] = await Promise.allSettled([
+          listRatingActions(), listActivityActions(),
+        ]);
+        const ratingActions = ratingActionsResult.status === 'fulfilled' ? ratingActionsResult.value : [];
+        const activityActions = activityActionsResult.status === 'fulfilled' ? activityActionsResult.value : [];
+        const [ratingRows, activityRows] = await Promise.all([
+          Promise.allSettled(ratingActions.map(action => listRatingEntries(action.id))),
+          Promise.allSettled(activityActions.map(action => listActivityAttempts(action.id))),
+        ]);
+        if (active) {
+          setEntries(ratingRows.flatMap(result => result.status === 'fulfilled' ? result.value : []));
+          setActivityAttempts(activityRows.flatMap(result => result.status === 'fulfilled' ? result.value : []));
+          const failed = ratingActionsResult.status === 'rejected' || activityActionsResult.status === 'rejected' ||
+            ratingRows.some(result => result.status === 'rejected') || activityRows.some(result => result.status === 'rejected');
+          setActionsError(failed ? 'Some recorded actions could not be loaded. Try again to see the full history.' : null);
+        }
       } catch (cause) {
-        if (active) setActionsError(cause instanceof Error ? cause.message : 'Could not load completed actions.');
+        if (active) setActionsError(cause instanceof Error ? cause.message : 'Could not load recorded actions.');
       } finally { if (active) setActionsLoading(false); }
     };
     void load();
@@ -67,15 +94,15 @@ export function JourneyScreen() {
   }, [retry, entryVersion]));
   const sessions = sortedSessions(library.recordings);
   const { needsReview, error: reviewError } = useSessionReviewStatus(sessions[0]);
-  const groups = completedMoodTimeline(sessions, entries);
+  const groups = completedActionTimeline(sessions, entries, activityAttempts);
   const shortDate = (index: number) => sessionDate(sessions[index]).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   return <Page>
     <Text style={typography.title}>Journey</Text>
     {library.isLoading ? <ActivityIndicator accessibilityLabel="Loading sessions" color={theme.colors.accent} /> : null}
-    {actionsLoading ? <ActivityIndicator accessibilityLabel="Loading completed actions" color={theme.colors.accent} /> : null}
-    {actionsError ? <Card><Text style={typography.error}>{actionsError}</Text><Button secondary label="Retry completed actions" onPress={() => setRetry(value => value + 1)} /></Card> : null}
+    {actionsLoading ? <ActivityIndicator accessibilityLabel="Loading recorded actions" color={theme.colors.accent} /> : null}
+    {actionsError ? <Card><Text style={typography.error}>{actionsError}</Text><Button secondary label="Retry recorded actions" onPress={() => setRetry(value => value + 1)} /></Card> : null}
     {library.error ? <Text accessibilityLiveRegion="polite" style={typography.error}>{library.error}</Text> : null}
-    {!library.isLoading && !library.recordings.length && !groups[0].length ? <Card>
+    {!library.isLoading && !actionsLoading && !actionsError && !library.recordings.length && !groups[0].length ? <Card>
       <Text style={typography.heading}>Your journey starts here</Text>
       <Text style={typography.body}>Record a session with Moodi. Once saved, you can return to it here.</Text>
       <Button label="Record a session" onPress={() => setOpen(true)} />
@@ -86,7 +113,7 @@ export function JourneyScreen() {
         index === 0 && needsReview === true ? 'Needs review' :
         index === 0 && needsReview === null ? 'Checking review status' : sessionStatus(recording);
       return <View key={recording.id}>
-      {!actionsLoading && !actionsError ? <CompletedActions
+      {!actionsLoading && (!actionsError || groups[index].length > 0) ? <RecordedActions
         initiallyOpen={index === 0}
         period={index === 0 ? `Since ${shortDate(0)}` : `${shortDate(index)} – ${shortDate(index - 1)}`}
         entries={groups[index]} onSelect={setSelected}
@@ -107,12 +134,14 @@ export function JourneyScreen() {
       <Text style={styles.arrow}>›</Text>
     </Pressable></View>
     </View>; })}
-    {!actionsLoading && !actionsError && groups[sessions.length].length ? <CompletedActions
-      period={sessions.length ? `Before ${shortDate(sessions.length - 1)}` : 'Your mood history'}
+    {!actionsLoading && groups[sessions.length].length ? <RecordedActions
+      period={sessions.length ? `Before ${shortDate(sessions.length - 1)}` : 'Your action history'}
       entries={groups[sessions.length]} onSelect={setSelected} initiallyOpen={!sessions.length}
     /> : null}
     </View>
-    {selected ? <MoodEntryDetail entry={selected} onClose={() => setSelected(null)} /> : null}
+    {selected?.kind === 'mood' ? <MoodEntryDetail entry={selected.entry} onClose={() => setSelected(null)} /> : null}
+    {selected?.kind === 'activity' ? <ActivityAttemptDetail attempt={selected.attempt}
+      occurredAt={selected.occurredAt} onClose={() => setSelected(null)} /> : null}
   </Page>;
 }
 const styles = StyleSheet.create({
@@ -136,7 +165,9 @@ const styles = StyleSheet.create({
   count: { minWidth: 24, textAlign: 'center', color: theme.colors.muted, backgroundColor: '#F0EFF4', borderRadius: 12, overflow: 'hidden', fontSize: 12, fontWeight: '700', padding: 3 },
   actionRow: { marginLeft: 18, marginTop: 4, padding: 8, borderRadius: 11, borderWidth: 1, borderColor: theme.colors.line, backgroundColor: '#F8F7FB', flexDirection: 'row', gap: 8, alignItems: 'center', minHeight: 46 },
   moodIcon: { width: 30, height: 30, borderRadius: 8, backgroundColor: '#EDE7FF', alignItems: 'center', justifyContent: 'center' },
+  activityIcon: { width: 34, height: 34, borderRadius: 9, backgroundColor: '#F6E9F1', alignItems: 'center', justifyContent: 'center' },
   actionName: { color: theme.colors.ink, fontSize: 13, fontWeight: '700' },
+  actionOutcome: { color: theme.colors.accent, fontSize: 12, fontWeight: '700', maxWidth: 85, textAlign: 'right' },
   actionScore: { color: theme.colors.accent, fontSize: 14, fontWeight: '800' }, actionOutOf: { fontSize: 11, fontWeight: '500' },
   status: { color: theme.colors.accent, fontSize: 13, fontWeight: '600' }, arrow: { fontSize: 28, color: theme.colors.muted },
 });
