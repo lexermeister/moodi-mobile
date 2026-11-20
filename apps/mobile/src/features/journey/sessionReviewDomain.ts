@@ -1,10 +1,22 @@
 import type { RecordRatingCandidate } from '../actions/actionTypes';
+import type { ActivityCandidate } from '../actions/activityTypes';
 import type { SessionInsightsReviewRequest } from '../recordings/sessionInsightsReviewTypes';
 import type { SessionInsightsResponse } from '../recordings/sessionInsightsTypes';
 
 export function recordMoodCandidates(insights?: SessionInsightsResponse): RecordRatingCandidate[] {
   return (insights?.result.action_candidates ?? [])
     .filter((candidate): candidate is RecordRatingCandidate => candidate.type === 'record_mood');
+}
+
+export function activityCandidates(insights?: SessionInsightsResponse): ActivityCandidate[] {
+  return (insights?.result.action_candidates ?? [])
+    .filter((candidate): candidate is ActivityCandidate => candidate.type === 'do_enjoyable_or_meaningful_activity');
+}
+
+export function reviewableActionCandidates(insights?: SessionInsightsResponse) {
+  return (insights?.result.action_candidates ?? [])
+    .filter((candidate): candidate is RecordRatingCandidate | ActivityCandidate =>
+      candidate.type === 'record_mood' || candidate.type === 'do_enjoyable_or_meaningful_activity');
 }
 
 export function summaryReviewRequest(insights?: SessionInsightsResponse): SessionInsightsReviewRequest | null {

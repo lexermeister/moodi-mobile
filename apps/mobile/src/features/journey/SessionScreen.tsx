@@ -10,7 +10,7 @@ import { formatDuration, isProcessing, sessionDate, sessionProcessingMessage, se
 export function SessionScreen() {
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, activityCandidateId } = useLocalSearchParams<{ id: string; activityCandidateId?: string }>();
   const library = useSharedRecordingLibrary();
   const { generateInsights } = library;
   const router = useRouter();
@@ -35,7 +35,7 @@ export function SessionScreen() {
         <Pressable accessibilityRole="button" accessibilityLabel={detailsOpen ? 'Hide recording details' : 'Show recording details'}
           onPress={() => setDetailsOpen(value => !value)} style={styles.more}><Text style={styles.moreText}>⋯</Text></Pressable></View>
         <Text style={styles.title}>{isToday ? 'Today' : 'Session review'}</Text></View>
-      <JourneySummary recording={recording} onClose={back} />
+      <JourneySummary recording={recording} onClose={back} initialActivityCandidateId={activityCandidateId} onViewSource={() => { setDetailsOpen(true); setTranscriptOpen(true); }} />
     </View>
     {(detailsOpen || canRetry || isProcessing(recording)) ? <>
     <Text style={typography.heading}>Recording</Text>
@@ -43,6 +43,9 @@ export function SessionScreen() {
       {isProcessing(recording) ? <ActivityIndicator accessibilityLabel="Processing session" /> : null}
       {processingMessage ? <Text style={recording.processingStatus === 'failed' ? typography.error : typography.body}>{processingMessage}</Text> : null}
       {canRetry ? <Button label="Retry processing" disabled={busy} onPress={() => library.generateInsights(recording)} /> : null}
+      {recording.processingStatus === 'completed' && recording.backendRecordingId && !recording.sessionInsightsReview
+        ? <Button secondary label="Refresh insights" disabled={busy} onPress={() => library.generateInsights(recording)} />
+        : null}
       <Text style={typography.body}>{formatDuration(recording.durationMs)}</Text>
       <Button secondary label={library.playingId === id ? 'Stop playback' : 'Play recording'} disabled={busy} onPress={() => void library.togglePlayback(recording)} />
     </Card>

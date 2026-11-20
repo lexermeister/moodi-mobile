@@ -4,6 +4,7 @@ import {
   type LegacyRatingCandidate,
   type RecordRatingCandidate,
 } from '../actions/actionTypes';
+import { isActivityCandidate, type ActivityCandidate } from '../actions/activityTypes';
 
 export type InsightVariant = 'P01' | 'P02' | 'P03';
 
@@ -72,7 +73,7 @@ export type SessionInsightsResult = {
   secondary_variant: InsightVariant | null;
   selection_note: string | null;
   facts: InsightFact[];
-  action_candidates: (RecordRatingCandidate | LegacyRatingCandidate)[];
+  action_candidates: (RecordRatingCandidate | LegacyRatingCandidate | ActivityCandidate)[];
   sections: InsightSection[];
   review_flags: InsightReviewFlag[];
 };
@@ -191,7 +192,7 @@ function isResult(value: unknown): value is SessionInsightsResult {
     Array.isArray(value.facts) &&
     value.facts.every(isFact) &&
     Array.isArray(value.action_candidates) &&
-    value.action_candidates.every(candidate => isRecordRatingCandidate(candidate) || isLegacyRatingCandidate(candidate)) &&
+    value.action_candidates.every(candidate => isRecordRatingCandidate(candidate) || isLegacyRatingCandidate(candidate) || isActivityCandidate(candidate)) &&
     Array.isArray(value.sections) &&
     value.sections.every(isSection) &&
     Array.isArray(value.review_flags) &&

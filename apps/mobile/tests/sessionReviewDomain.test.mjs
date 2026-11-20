@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { recordMoodCandidates, summaryReviewRequest } from '../src/features/journey/sessionReviewDomain.ts';
+import { recordMoodCandidates, reviewableActionCandidates, summaryReviewRequest } from '../src/features/journey/sessionReviewDomain.ts';
 
 const insights = {
   draft_id: 'draft-1', source_version: 'source-1', result: { status: 'draft',
@@ -18,6 +18,14 @@ test('the action review step shows only Record mood and keeps summary review sep
       { item_id: 'b', disposition: 'retained', displayed_text: 'Second point' },
     ],
   });
+});
+
+test('review includes activity candidates in transcript order', () => {
+  const withActivity = { ...insights, result: { ...insights.result, action_candidates: [
+    { id: 'activity', type: 'do_enjoyable_or_meaningful_activity' },
+    ...insights.result.action_candidates,
+  ] } };
+  assert.deepEqual(reviewableActionCandidates(withActivity).map(candidate => candidate.id), ['activity', 'mood']);
 });
 
 test('a limited or unidentifiable summary cannot be marked reviewed', () => {

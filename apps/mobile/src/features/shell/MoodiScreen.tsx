@@ -3,6 +3,7 @@ import { Page, typography } from '@/ui/components';
 import { useMoodiPanel } from './MoodiPanel';
 import { RecentMoodChart } from './RecentMoodChart';
 import { TodayMoodActions } from '../actions/TodayMoodActions';
+import { TodayActivityActions } from '../actions/TodayActivityActions';
 import { MoodEntriesSection } from '../actions/MoodEntriesSection';
 import { ReviewSessionTodo } from './ReviewSessionTodo';
 import { useSharedRecordingLibrary } from '../recordings/RecordingLibraryProvider';
@@ -19,6 +20,7 @@ export function MoodiScreen() {
       {recordingActive ? <TodoRow kind="recording" title="Recording session"
         subtitle="Open Moodi to see the session" onPress={() => setOpen(true)} /> : <ReviewSessionTodo />}
       <TodayMoodActions refreshKey={entryVersion} />
+      <TodayActivityActions />
     </View>
     <RecentMoodChart key={entryVersion} />
     <MoodEntriesSection refreshKey={entryVersion} />

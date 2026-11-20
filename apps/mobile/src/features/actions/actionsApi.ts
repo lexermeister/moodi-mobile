@@ -9,6 +9,7 @@ import {
   type RatingEntryValues,
   type RecordRatingActionSettings,
 } from './actionTypes';
+import { isActivityAction, type ActivityAction, type ActivitySettings } from './activityTypes';
 
 class ActionsApiError extends Error {
   constructor(
@@ -61,18 +62,58 @@ async function requestJson(path: string, init?: RequestInit): Promise<unknown> {
   return body ? parseJson(body) : null;
 }
 
-export async function listRatingActions(recordingId?: string): Promise<RatingAction[]> {
+async function listActions(recordingId?: string): Promise<(RatingAction | ActivityAction)[]> {
   const query = recordingId ? `?recording_id=${encodeURIComponent(recordingId)}` : '';
   const payload = await requestJson(`/actions${query}`);
   if (
     !payload ||
     typeof payload !== 'object' ||
     !Array.isArray((payload as { actions?: unknown }).actions) ||
-    !(payload as { actions: unknown[] }).actions.every(isRatingAction)
+    !(payload as { actions: unknown[] }).actions.every(action => isRatingAction(action) || isActivityAction(action))
   ) {
     throw new ActionsApiError('The Moodi backend returned invalid Actions.');
   }
-  return (payload as { actions: RatingAction[] }).actions;
+  return (payload as { actions: (RatingAction | ActivityAction)[] }).actions;
+}
+
+export async function listRatingActions(recordingId?: string): Promise<RatingAction[]> {
+  return (await listActions(recordingId)).filter(isRatingAction);
+}
+
+export async function listActivityActions(recordingId?: string): Promise<ActivityAction[]> {
+  return (await listActions(recordingId)).filter(isActivityAction);
+}
+
+export async function reviewActivityCandidate({ recordingId, candidateId, draftId, sourceVersion,
+  disposition, settings }: { recordingId: string; candidateId: string; draftId: string;
+  sourceVersion: string; disposition: 'activate' | 'reject'; settings: ActivitySettings | null;
+}): Promise<{ disposition: 'activated' | 'rejected'; action: ActivityAction | null }> {
+  const payload = await requestJson(
+    `/recordings/${encodeURIComponent(recordingId)}/action-candidates/${encodeURIComponent(candidateId)}/review`,
+    { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ draft_id: draftId, source_version: sourceVersion, disposition, settings }) },
+  );
+  if (!payload || typeof payload !== 'object') throw new ActionsApiError('Invalid activity review.');
+  const review = payload as { disposition?: unknown; action?: unknown };
+  if ((review.disposition !== 'activated' && review.disposition !== 'rejected') ||
+    (review.action !== null && !isActivityAction(review.action))) {
+    throw new ActionsApiError('The Moodi backend returned an invalid activity Action.');
+  }
+  return { disposition: review.disposition, action: review.action as ActivityAction | null };
+}
+
+export async function getActivityCandidateResolution(recordingId: string, candidateId: string) {
+  const payload = await requestJson(
+    `/recordings/${encodeURIComponent(recordingId)}/action-candidates/${encodeURIComponent(candidateId)}/resolution`,
+  );
+  if (!payload || typeof payload !== 'object') throw new ActionsApiError('Invalid activity resolution.');
+  const result = payload as { status?: unknown; action?: unknown };
+  if (!['needs_setup', 'activated', 'rejected'].includes(result.status as string) ||
+    (result.action !== null && !isActivityAction(result.action))) {
+    throw new ActionsApiError('The Moodi backend returned an invalid activity resolution.');
+  }
+  return { status: result.status as 'needs_setup' | 'activated' | 'rejected',
+    action: result.action as ActivityAction | null };
 }
 
 export async function getRatingAction(actionId: string): Promise<RatingAction> {

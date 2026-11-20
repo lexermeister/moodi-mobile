@@ -2,19 +2,23 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MoodiWave } from '@/ui/MoodiWave';
 import { measurementLabels } from '../actions/moodSetup';
-import { confirmActionReviews, getActionReviewConfirmation, getRatingCandidateResolution, type ActionReviewConfirmation } from '../actions/actionsApi';
+import { confirmActionReviews, getActionReviewConfirmation, getActivityCandidateResolution, getRatingCandidateResolution, type ActionReviewConfirmation } from '../actions/actionsApi';
+import { ActivitySetupCard, type ActivityReviewState } from '../actions/ActivitySetupCard';
 import { RecordMoodSetupCard, type RecordMoodSessionState } from '../actions/RecordMoodSetupCard';
 import type { RecordingMetadata } from '../recordings/recordingStorage';
 import { useSharedRecordingLibrary } from '../recordings/RecordingLibraryProvider';
 import { isProcessing, sessionDate, sessionProcessingMessage } from './sessionPresentation';
-import { recordMoodCandidates, summaryReviewRequest } from './sessionReviewDomain';
+import { reviewableActionCandidates, summaryReviewRequest } from './sessionReviewDomain';
 
-type Step = 'review' | 'mood';
+type Step = 'review' | 'mood' | 'activity';
 
-export function JourneySummary({ recording, onClose }: { recording: RecordingMetadata; onClose: () => void }) {
-  const [step, setStep] = useState<Step>('review');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [actionStates, setActionStates] = useState<Record<string, RecordMoodSessionState>>({});
+export function JourneySummary({ recording, onClose, onViewSource, initialActivityCandidateId }: { recording: RecordingMetadata; onClose: () => void; onViewSource?: () => void; initialActivityCandidateId?: string }) {
+  const initialActivity = recording.sessionInsights?.result.action_candidates.some(candidate =>
+    candidate.id === initialActivityCandidateId && candidate.type === 'do_enjoyable_or_meaningful_activity')
+    ? initialActivityCandidateId : undefined;
+  const [step, setStep] = useState<Step>(initialActivity ? 'activity' : 'review');
+  const [selectedId, setSelectedId] = useState<string | null>(initialActivity ?? null);
+  const [actionStates, setActionStates] = useState<Record<string, RecordMoodSessionState | ActivityReviewState>>({});
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [loadedActionDraftId, setLoadedActionDraftId] = useState<string | null>(null);
@@ -34,7 +38,7 @@ export function JourneySummary({ recording, onClose }: { recording: RecordingMet
   })) : insights?.result.sections.map(section => ({
     key: section.key, heading: section.heading, bullets: section.bullets.map(item => item.text),
   })) ?? [];
-  const candidates = useMemo(() => recordMoodCandidates(insights), [insights]);
+  const candidates = useMemo(() => reviewableActionCandidates(insights), [insights]);
   const intro = !insights ? 'Your session summary will appear here when it’s ready.'
     : candidates.length ? `Take a look at the summary. I pulled out ${candidates.length === 1 ? 'one action' : `${candidates.length} actions`} you agreed to try.`
       : 'Take a look at the summary. Review what we discussed.';
@@ -60,15 +64,17 @@ export function JourneySummary({ recording, onClose }: { recording: RecordingMet
     const recordingId = recording.backendRecordingId;
     if (!recordingId || !insights?.draft_id) return;
     let cancelled = false;
-    const currentCandidates = recordMoodCandidates(insights);
+    const currentCandidates = reviewableActionCandidates(insights);
     void Promise.all([
       getActionReviewConfirmation(recordingId),
-      ...currentCandidates.map(candidate => getRatingCandidateResolution(recordingId, candidate.id)),
+      ...currentCandidates.map(candidate => candidate.type === 'record_mood'
+        ? getRatingCandidateResolution(recordingId, candidate.id)
+        : getActivityCandidateResolution(recordingId, candidate.id)),
     ]).then(([confirmation, ...resolutions]) => {
       if (cancelled) return;
       setActionConfirmation(confirmation as ActionReviewConfirmation | null);
       setActionStates(current => {
-        const next: Record<string, RecordMoodSessionState> = {};
+        const next: Record<string, RecordMoodSessionState | ActivityReviewState> = {};
         currentCandidates.forEach((candidate, index) => {
           const status = resolutions[index].status;
           const key = `${insights.draft_id}:${candidate.id}`;
@@ -126,7 +132,7 @@ export function JourneySummary({ recording, onClose }: { recording: RecordingMet
         <Text style={styles.retryText}>Retry</Text>
       </Pressable> : null}
     </View> : null}
-    {step === 'mood' ? <Pressable accessibilityRole="button" onPress={() => setStep('review')} style={styles.back}>
+    {step !== 'review' ? <Pressable accessibilityRole="button" onPress={() => setStep('review')} style={styles.back}>
       <Text style={styles.backText}>‹  Back</Text>
     </Pressable> : null}
     <ScrollView key={step} nestedScrollEnabled style={styles.scroll} contentContainerStyle={styles.content}>
@@ -151,20 +157,32 @@ export function JourneySummary({ recording, onClose }: { recording: RecordingMet
           </Pressable>
           <Text accessibilityRole="header" style={styles.sectionTitle}>Actions to review</Text>
           <Text style={styles.body}>Open each action to check the plan, then activate or reject it.</Text>
+          {insights.result.review_flags.some(flag => flag.code === 'missing_action_detail' &&
+            flag.detail.startsWith('An activity action was omitted')) ?
+            <Text accessibilityRole="alert" style={styles.body}>
+              One possible activity action could not be linked to the transcript. Check the transcript if you expected it here.
+            </Text> : null}
           {candidates.length ? candidates.map(candidate => <Pressable key={candidate.id} accessibilityRole="button"
-            accessibilityLabel={`Record mood, ${actionLabel(candidate.id)}`}
-            onPress={() => { setSelectedId(candidate.id); setStep('mood'); }} style={styles.actionRow}>
+            accessibilityLabel={`${candidate.type === 'record_mood' ? 'Record mood' : 'Do an enjoyable or meaningful activity'}, ${actionLabel(candidate.id)}`}
+            onPress={() => { setSelectedId(candidate.id); setStep(candidate.type === 'record_mood' ? 'mood' : 'activity'); }} style={styles.actionRow}>
             <View style={styles.actionIcon}><MoodiWave width={20} /></View>
-            <View style={styles.actionCopy}><Text style={styles.actionName}>Record mood</Text>
-              <Text style={styles.actionDetail}>{[candidate.frequency, candidate.timing, measurementLabels(candidate.what_to_record ?? ['mood'])].filter(Boolean).join(' · ')}</Text></View>
+            <View style={styles.actionCopy}><Text style={styles.actionName}>{candidate.type === 'record_mood' ? 'Record mood' : 'Do an enjoyable or meaningful activity'}</Text>
+              <Text style={styles.actionDetail}>{candidate.type === 'record_mood'
+                ? [candidate.frequency, candidate.timing, measurementLabels(candidate.what_to_record ?? ['mood'])].filter(Boolean).join(' · ')
+                : [candidate.agreed_activity ?? 'Choose when ready', candidate.frequency, candidate.timing].filter(Boolean).join(' · ')}</Text></View>
             <Text style={styles.reviewLink}>{actionLabel(candidate.id)} ›</Text>
-          </Pressable>) : <Text style={styles.body}>No Record mood action was identified in this session.</Text>}
+          </Pressable>) : <Text style={styles.body}>No agreed action was identified in this session.</Text>}
           {confirmed ? <Text style={styles.success}>Action reviews confirmed ✓</Text> : null}
         </> : null}
-      </> : selected ? <RecordMoodSetupCard key={`${insights?.draft_id}:${selected.id}`} candidate={selected}
+      </> : selected?.type === 'record_mood' ? <RecordMoodSetupCard key={`${insights?.draft_id}:${selected.id}`} candidate={selected}
         recordingId={recording.backendRecordingId} draftId={insights?.draft_id} sourceVersion={insights?.source_version}
         onSessionStateChange={status => setActionStates(current => current[actionKey(selected.id)] === status ? current : { ...current, [actionKey(selected.id)]: status })}
-        onResolved={() => { setSelectedId(null); setStep('review'); }} /> : null}
+        onResolved={() => { setSelectedId(null); setStep('review'); }} /> : selected?.type === 'do_enjoyable_or_meaningful_activity' ?
+        <ActivitySetupCard key={`${insights?.draft_id}:${selected.id}`} candidate={selected}
+          recordingId={recording.backendRecordingId} draftId={insights?.draft_id} sourceVersion={insights?.source_version}
+          onViewSource={onViewSource}
+          onStatusChange={status => setActionStates(current => current[actionKey(selected.id)] === status ? current : { ...current, [actionKey(selected.id)]: status })}
+          onResolved={() => { setSelectedId(null); setStep('review'); }} /> : null}
     </ScrollView>
     {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
     {step === 'review' && review && (canConfirm || confirmed || !candidates.length) ? <View style={styles.footer}>

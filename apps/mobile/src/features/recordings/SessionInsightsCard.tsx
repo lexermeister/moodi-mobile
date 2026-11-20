@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AgreedActionsSection } from '../actions/AgreedActionsSection';
+import { ActivitySetupCard, type ActivityReviewState } from '../actions/ActivitySetupCard';
 import type { RecordMoodSessionState } from '../actions/RecordMoodSetupCard';
 import type { RecordingMetadata } from './recordingStorage';
 import { SessionInsightsEditor } from './SessionInsightsEditor';
@@ -21,7 +22,7 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
   const [summaryNotice, setSummaryNotice] = useState<{ draftId: string; message: string } | null>(
     null,
   );
-  const [actionStates, setActionStates] = useState<Record<string, RecordMoodSessionState>>({});
+  const [actionStates, setActionStates] = useState<Record<string, RecordMoodSessionState | ActivityReviewState>>({});
   const insights = recording.sessionInsights?.result;
   const draftId = recording.sessionInsights?.draft_id;
   const reviewableInsights =
@@ -39,6 +40,7 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
       ? savedReview
       : undefined;
   const actionCandidates = (insights?.action_candidates ?? []).filter(candidate => candidate.type === 'record_mood');
+  const activityCandidates = (insights?.action_candidates ?? []).filter(candidate => candidate.type === 'do_enjoyable_or_meaningful_activity');
   const hasLegacyActions = insights?.action_candidates.some(candidate => candidate.type === 'record_rating');
   const actionSourceVersion =
     recording.sessionInsights?.source_version ?? insights?.source_version ?? 'no-source';
@@ -47,7 +49,7 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
     [actionSourceVersion, draftId],
   );
   const handleActionStatusChange = useCallback(
-    (candidateId: string, status: RecordMoodSessionState) => {
+    (candidateId: string, status: RecordMoodSessionState | ActivityReviewState) => {
       const key = actionStateKey(candidateId);
       setActionStates((current) =>
         current[key] === status ? current : { ...current, [key]: status },
@@ -55,7 +57,7 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
     },
     [actionStateKey],
   );
-  const pendingActionStatuses = actionCandidates
+  const pendingActionStatuses = [...actionCandidates, ...activityCandidates]
     .map((candidate) => actionStates[actionStateKey(candidate.id)] ?? 'loading')
     .filter((status) => status === 'needs_setup' || status === 'already_active');
   const displayedSections = useMemo(
@@ -213,6 +215,11 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
               sourceVersion={actionSourceVersion}
             />
           ))}
+          {activityCandidates.map(candidate => <ActivitySetupCard
+            key={`${recording.id}:${actionSourceVersion}:${candidate.id}`}
+            candidate={candidate} recordingId={recording.backendRecordingId}
+            draftId={draftId} sourceVersion={actionSourceVersion}
+            onStatusChange={status => handleActionStatusChange(candidate.id, status)} />)}
         </>
       ) : null}
 
