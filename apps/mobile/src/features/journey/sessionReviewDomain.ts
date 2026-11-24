@@ -9,14 +9,20 @@ export function recordMoodCandidates(insights?: SessionInsightsResponse): Record
 }
 
 export function activityCandidates(insights?: SessionInsightsResponse): ActivityCandidate[] {
-  return (insights?.result.action_candidates ?? [])
-    .filter((candidate): candidate is ActivityCandidate => candidate.type === 'do_enjoyable_or_meaningful_activity');
+  const first = (insights?.result.action_candidates ?? [])
+    .find((candidate): candidate is ActivityCandidate => candidate.type === 'do_enjoyable_or_meaningful_activity');
+  return first ? [first] : [];
 }
 
 export function reviewableActionCandidates(insights?: SessionInsightsResponse) {
+  let hasActivity = false;
   return (insights?.result.action_candidates ?? [])
-    .filter((candidate): candidate is RecordRatingCandidate | ActivityCandidate =>
-      candidate.type === 'record_mood' || candidate.type === 'do_enjoyable_or_meaningful_activity');
+    .filter((candidate): candidate is RecordRatingCandidate | ActivityCandidate => {
+      if (candidate.type === 'record_mood') return true;
+      if (candidate.type !== 'do_enjoyable_or_meaningful_activity' || hasActivity) return false;
+      hasActivity = true;
+      return true;
+    });
 }
 
 export function summaryReviewRequest(insights?: SessionInsightsResponse): SessionInsightsReviewRequest | null {

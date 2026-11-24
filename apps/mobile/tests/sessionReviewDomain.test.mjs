@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { recordMoodCandidates, reviewableActionCandidates, summaryReviewRequest } from '../src/features/journey/sessionReviewDomain.ts';
+import { activityCandidates, recordMoodCandidates, reviewableActionCandidates, summaryReviewRequest } from '../src/features/journey/sessionReviewDomain.ts';
 
 const insights = {
   draft_id: 'draft-1', source_version: 'source-1', result: { status: 'draft',
@@ -26,6 +26,17 @@ test('review includes activity candidates in transcript order', () => {
     ...insights.result.action_candidates,
   ] } };
   assert.deepEqual(reviewableActionCandidates(withActivity).map(candidate => candidate.id), ['activity', 'mood']);
+});
+
+test('review shows an activity only once when an older draft contains several variants', () => {
+  const withDuplicates = { ...insights, result: { ...insights.result, action_candidates: [
+    { id: 'first', type: 'do_enjoyable_or_meaningful_activity', frequency: 'daily' },
+    { id: 'second', type: 'do_enjoyable_or_meaningful_activity', frequency: 'weekly' },
+    ...insights.result.action_candidates,
+    { id: 'third', type: 'do_enjoyable_or_meaningful_activity', timing: 'evening' },
+  ] } };
+  assert.deepEqual(activityCandidates(withDuplicates).map(candidate => candidate.id), ['first']);
+  assert.deepEqual(reviewableActionCandidates(withDuplicates).map(candidate => candidate.id), ['first', 'mood']);
 });
 
 test('a limited or unidentifiable summary cannot be marked reviewed', () => {

@@ -13,11 +13,12 @@ function needsReview(recording: RecordingMetadata | undefined, confirmation: Act
     recording.sessionInsightsReview?.source_version === insights?.source_version;
   if (!summaryReviewed) return true;
   const candidateIds = reviewableActionCandidates(insights).map(candidate => candidate.id);
+  const legacyCandidateIds = insights?.result.action_candidates.map(candidate => candidate.id) ?? [];
   if (!candidateIds.length) return false;
   if (confirmation === undefined) return null;
   return !confirmation || confirmation.draft_id !== insights?.draft_id ||
     confirmation.source_version !== insights?.source_version ||
-    confirmation.candidate_ids.join('|') !== candidateIds.join('|');
+    ![candidateIds.join('|'), legacyCandidateIds.join('|')].includes(confirmation.candidate_ids.join('|'));
 }
 
 export function useSessionReviewStatus(recording: RecordingMetadata | undefined) {

@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AgreedActionsSection } from '../actions/AgreedActionsSection';
 import { ActivitySetupCard, type ActivityReviewState } from '../actions/ActivitySetupCard';
+import { activityCandidates as reviewActivityCandidates } from '../journey/sessionReviewDomain';
 import type { RecordMoodSessionState } from '../actions/RecordMoodSetupCard';
 import type { RecordingMetadata } from './recordingStorage';
 import { SessionInsightsEditor } from './SessionInsightsEditor';
@@ -40,7 +41,7 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
       ? savedReview
       : undefined;
   const actionCandidates = (insights?.action_candidates ?? []).filter(candidate => candidate.type === 'record_mood');
-  const activityCandidates = (insights?.action_candidates ?? []).filter(candidate => candidate.type === 'do_enjoyable_or_meaningful_activity');
+  const activityCandidates = reviewActivityCandidates(recording.sessionInsights);
   const hasLegacyActions = insights?.action_candidates.some(candidate => candidate.type === 'record_rating');
   const actionSourceVersion =
     recording.sessionInsights?.source_version ?? insights?.source_version ?? 'no-source';

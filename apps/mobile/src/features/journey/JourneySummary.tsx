@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SymbolView } from 'expo-symbols';
 import { MoodiWave } from '@/ui/MoodiWave';
 import { measurementLabels } from '../actions/moodSetup';
 import { confirmActionReviews, getActionReviewConfirmation, getActivityCandidateResolution, getRatingCandidateResolution, type ActionReviewConfirmation } from '../actions/actionsApi';
@@ -8,14 +9,14 @@ import { RecordMoodSetupCard, type RecordMoodSessionState } from '../actions/Rec
 import type { RecordingMetadata } from '../recordings/recordingStorage';
 import { useSharedRecordingLibrary } from '../recordings/RecordingLibraryProvider';
 import { isProcessing, sessionDate, sessionProcessingMessage } from './sessionPresentation';
-import { reviewableActionCandidates, summaryReviewRequest } from './sessionReviewDomain';
+import { activityCandidates, reviewableActionCandidates, summaryReviewRequest } from './sessionReviewDomain';
 
 type Step = 'review' | 'mood' | 'activity';
 
 export function JourneySummary({ recording, onClose, onViewSource, initialActivityCandidateId }: { recording: RecordingMetadata; onClose: () => void; onViewSource?: () => void; initialActivityCandidateId?: string }) {
   const initialActivity = recording.sessionInsights?.result.action_candidates.some(candidate =>
     candidate.id === initialActivityCandidateId && candidate.type === 'do_enjoyable_or_meaningful_activity')
-    ? initialActivityCandidateId : undefined;
+    ? activityCandidates(recording.sessionInsights)[0]?.id : undefined;
   const [step, setStep] = useState<Step>(initialActivity ? 'activity' : 'review');
   const [selectedId, setSelectedId] = useState<string | null>(initialActivity ?? null);
   const [actionStates, setActionStates] = useState<Record<string, RecordMoodSessionState | ActivityReviewState>>({});
@@ -45,11 +46,12 @@ export function JourneySummary({ recording, onClose, onViewSource, initialActivi
   const selected = candidates.find(candidate => candidate.id === selectedId);
   const reviewRequest = summaryReviewRequest(insights);
   const candidateKey = candidates.map(candidate => candidate.id).join('|');
+  const legacyCandidateKey = insights?.result.action_candidates.map(candidate => candidate.id).join('|');
   const actionKey = (candidateId: string) => `${insights?.draft_id ?? 'no-draft'}:${candidateId}`;
   const loadingActions = Boolean(insights?.draft_id && loadedActionDraftId !== insights.draft_id);
   const confirmed = Boolean(actionConfirmation && actionConfirmation.draft_id === insights?.draft_id &&
     actionConfirmation.source_version === insights?.source_version &&
-    actionConfirmation.candidate_ids.join('|') === candidateKey);
+    [candidateKey, legacyCandidateKey].includes(actionConfirmation.candidate_ids.join('|')));
   const canConfirm = Boolean(review && recording.backendRecordingId && insights?.draft_id && insights?.source_version &&
     candidates.length > 0 && !loadingActions && !confirming && !confirmed &&
     candidates.every(candidate => ['active', 'linked_existing', 'not_added'].includes(actionStates[actionKey(candidate.id)])));
@@ -163,13 +165,16 @@ export function JourneySummary({ recording, onClose, onViewSource, initialActivi
               One possible activity action could not be linked to the transcript. Check the transcript if you expected it here.
             </Text> : null}
           {candidates.length ? candidates.map(candidate => <Pressable key={candidate.id} accessibilityRole="button"
-            accessibilityLabel={`${candidate.type === 'record_mood' ? 'Record mood' : 'Do an enjoyable or meaningful activity'}, ${actionLabel(candidate.id)}`}
+            accessibilityLabel={`${candidate.type === 'record_mood' ? 'Record mood' : 'Do an enjoyable activity'}, ${actionLabel(candidate.id)}`}
             onPress={() => { setSelectedId(candidate.id); setStep(candidate.type === 'record_mood' ? 'mood' : 'activity'); }} style={styles.actionRow}>
-            <View style={styles.actionIcon}><MoodiWave width={20} /></View>
-            <View style={styles.actionCopy}><Text style={styles.actionName}>{candidate.type === 'record_mood' ? 'Record mood' : 'Do an enjoyable or meaningful activity'}</Text>
-              <Text style={styles.actionDetail}>{candidate.type === 'record_mood'
-                ? [candidate.frequency, candidate.timing, measurementLabels(candidate.what_to_record ?? ['mood'])].filter(Boolean).join(' · ')
-                : [candidate.agreed_activity ?? 'Choose when ready', candidate.frequency, candidate.timing].filter(Boolean).join(' · ')}</Text></View>
+            <View style={[styles.actionIcon, candidate.type === 'do_enjoyable_or_meaningful_activity' && styles.activityIcon]}>
+              {candidate.type === 'record_mood' ? <MoodiWave width={20} /> :
+                <SymbolView name={{ ios: 'heart', android: 'favorite', web: 'favorite' }} size={22} tintColor="#7B4D73" />}
+            </View>
+            <View style={styles.actionCopy}><Text style={styles.actionName}>{candidate.type === 'record_mood' ? 'Record mood' : 'Do an enjoyable activity'}</Text>
+              {candidate.type === 'record_mood' ? <Text style={styles.actionDetail}>
+                {[candidate.frequency, candidate.timing, measurementLabels(candidate.what_to_record ?? ['mood'])].filter(Boolean).join(' · ')}
+              </Text> : null}</View>
             <Text style={styles.reviewLink}>{actionLabel(candidate.id)} ›</Text>
           </Pressable>) : <Text style={styles.body}>No agreed action was identified in this session.</Text>}
           {confirmed ? <Text style={styles.success}>Action reviews confirmed ✓</Text> : null}
@@ -224,6 +229,7 @@ const styles = StyleSheet.create({
   success: { color: '#BFE8CB', fontSize: 13, fontWeight: '700' },
   actionRow: { borderWidth: 1, borderColor: '#4A4655', backgroundColor: '#2E2B36', borderRadius: 11, padding: 10, flexDirection: 'row', gap: 9, alignItems: 'center', minHeight: 64 },
   actionIcon: { width: 34, height: 34, borderRadius: 8, backgroundColor: '#403954', justifyContent: 'center', alignItems: 'center' },
+  activityIcon: { backgroundColor: '#F6E9F1', borderRadius: 9 },
   actionCopy: { flex: 1, gap: 3 }, actionName: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
   actionDetail: { color: '#C7C2D0', fontSize: 12 }, reviewLink: { color: '#C9B7FF', fontSize: 12, fontWeight: '700' },
 });

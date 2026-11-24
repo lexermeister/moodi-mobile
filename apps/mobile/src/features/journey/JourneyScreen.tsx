@@ -38,14 +38,14 @@ function RecordedActions({ period, entries, onSelect, initiallyOpen = false }: {
         <Text style={styles.period}>{entryTimeLabel(item.entry)}</Text></View>
       <Text style={styles.actionScore}>{item.entry.values.mood_value}<Text style={styles.actionOutOf}>/10</Text></Text>
     </Pressable> : <Pressable key={item.id} accessibilityRole="button"
-      accessibilityLabel={`${item.attempt.selection.label}, ${outcomeLabels[item.attempt.outcome!]}, ${new Date(item.occurredAt).toLocaleString()}`}
+      accessibilityLabel={`Do an enjoyable activity, ${outcomeLabels[item.attempt.outcome!]}, ${new Date(item.occurredAt).toLocaleString()}`}
       onPress={() => onSelect(item)} style={({ pressed }) => [styles.actionRow, pressed && { opacity: 0.6 }]}>
       <View style={styles.activityIcon}><SymbolView name={{ ios: 'heart', android: 'favorite', web: 'favorite' }}
         size={22} tintColor="#7B4D73" /></View>
-      <View style={styles.copy}><Text style={styles.actionName} numberOfLines={2}>{item.attempt.selection.label}</Text>
-        <Text style={styles.period}>Enjoyable activity · {new Date(item.occurredAt).toLocaleString(undefined,
-          { dateStyle: 'medium', timeStyle: 'short' })}</Text></View>
-      <Text style={styles.actionOutcome}>{outcomeLabels[item.attempt.outcome!]}</Text>
+      <View style={styles.copy}><Text style={styles.actionName}>Do an enjoyable activity</Text>
+        <Text style={styles.period}>{new Date(item.occurredAt).toLocaleString(undefined, {
+          month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+        })}</Text></View>
     </Pressable>) : <Text style={styles.emptyActions}>No recorded actions in this period.</Text> : null}
   </View>;
 }
@@ -167,7 +167,6 @@ const styles = StyleSheet.create({
   moodIcon: { width: 30, height: 30, borderRadius: 8, backgroundColor: '#EDE7FF', alignItems: 'center', justifyContent: 'center' },
   activityIcon: { width: 34, height: 34, borderRadius: 9, backgroundColor: '#F6E9F1', alignItems: 'center', justifyContent: 'center' },
   actionName: { color: theme.colors.ink, fontSize: 13, fontWeight: '700' },
-  actionOutcome: { color: theme.colors.accent, fontSize: 12, fontWeight: '700', maxWidth: 85, textAlign: 'right' },
   actionScore: { color: theme.colors.accent, fontSize: 14, fontWeight: '800' }, actionOutOf: { fontSize: 11, fontWeight: '500' },
   status: { color: theme.colors.accent, fontSize: 13, fontWeight: '600' }, arrow: { fontSize: 28, color: theme.colors.muted },
 });
