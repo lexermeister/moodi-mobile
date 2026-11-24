@@ -6,9 +6,9 @@ const values = { relevant_date: '2026-11-16', entry_time: '2026-11-16T12:00:00Z'
   day_key: '2026-11-16', mood_value: 0, mood_label: null, context: null, scale_id: 'overall-day-mood-0-10-v1', current_step: 'review' };
 
 test('only selected questions appear and intensity depends on a supplied feeling', () => {
-  assert.deepEqual(moodSteps(['mood'], values), ['mood', 'feelings', 'context', 'review']);
+  assert.deepEqual(moodSteps(['mood'], values), ['mood', 'feelings', 'context', 'thoughts', 'actions_taken', 'review']);
   assert.deepEqual(moodSteps(['mood', 'energy'], { ...values, custom_feeling: ' hopeful ' }),
-    ['mood', 'additional_ratings', 'feelings', 'intensity', 'context', 'review']);
+    ['mood', 'additional_ratings', 'feelings', 'intensity', 'context', 'thoughts', 'actions_taken', 'review']);
   assert.equal(moodSteps(['mood'], { ...values, custom_feeling: '  ' }).includes('intensity'), false);
 });
 
