@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { practiceSettings, practiceTitle, parsePracticeMinutes, timerSeconds, practiceSummary } from '../src/features/actions/practiceFlowDomain.ts';
+import { practiceSettings, practiceTitle, parsePracticeMinutes, timerSeconds, practiceSummary, practiceDateLabel, practiceTimeLabel, practiceLogTime } from '../src/features/actions/practiceFlowDomain.ts';
 import { reviewableActionCandidates } from '../src/features/journey/sessionReviewDomain.ts';
 import { completedActionTimeline } from '../src/features/journey/completedActionTimeline.ts';
 
@@ -32,12 +32,46 @@ test('elapsed timer preserves paused time and handles background gaps', () => {
 });
 
 test('practice review preserves optional values and a real zero rating', () => {
-  const rows = practiceSummary({ relevant_date: '2026-11-25', outcome: 'stopped_early',
+  const summary = practiceSummary({ relevant_date: '2026-11-25', outcome: 'stopped_early',
     actual_minutes: null, tension_before: 0, tension_after: 7, notes: null, timer_used: true,
     timer_elapsed_seconds: 35 });
-  assert.ok(rows.some(row => row.value === '0/10'));
-  assert.ok(rows.some(row => row.value === '7/10'));
-  assert.ok(rows.some(row => row.value === 'Not recorded'));
+  assert.equal(summary.tensionBefore, '0/10');
+  assert.equal(summary.tensionAfter, '7/10');
+  assert.equal(summary.duration, 'Not recorded');
+  assert.equal(summary.date, practiceDateLabel('2026-11-25'));
+  assert.equal(summary.notes, null);
+});
+
+test('practice dates keep the recorded calendar day across time zones', () => {
+  const previous = process.env.TZ;
+  try {
+    for (const timezone of ['America/Los_Angeles', 'Pacific/Auckland', 'Europe/Belgrade']) {
+      process.env.TZ = timezone;
+      assert.equal(practiceDateLabel('2026-11-26'), new Date(2026, 10, 26, 12).toLocaleDateString(undefined,
+        { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }));
+    }
+  } finally {
+    if (previous === undefined) delete process.env.TZ;
+    else process.env.TZ = previous;
+  }
+});
+
+test('practice time labels use the local logging time at each boundary', () => {
+  for (const [hour, expected] of [[0, 'Before Sleep'], [4, 'Before Sleep'], [5, 'Morning'],
+    [11, 'Morning'], [12, 'Midday'], [16, 'Midday'], [17, 'Evening'], [20, 'Evening'],
+    [21, 'Before Sleep'], [23, 'Before Sleep']]) {
+    assert.equal(practiceTimeLabel(new Date(2026, 10, 26, hour, 0).toISOString()), expected);
+  }
+  assert.equal(practiceTimeLabel('invalid'), null);
+});
+
+test('review keeps the original logging period after an amendment', () => {
+  const original = '2026-11-26T09:00:00Z';
+  assert.equal(practiceLogTime({ updated_at: '2026-11-27T22:00:00Z', history: [
+    { status: 'draft', saved_at: '2026-11-26T08:55:00Z' },
+    { status: 'confirmed', saved_at: original },
+  ] }), original);
+  assert.equal(practiceLogTime({ updated_at: original, history: [] }), original);
 });
 
 test('practice coexists with other actions in review and confirmed Journey history', () => {

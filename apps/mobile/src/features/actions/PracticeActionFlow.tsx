@@ -6,7 +6,7 @@ import { getPracticeAction, listPracticeAttempts, savePracticeAttempt } from './
 import { formatElapsed, newActivityAttemptId, outcomeLabels } from './activityFlowDomain';
 import type { ActivityOutcome } from './activityTypes';
 import { MoodScale } from './MoodScale';
-import { newPracticeData, PracticeAttemptWriter, parsePracticeMinutes, practiceTitle, timerSeconds } from './practiceFlowDomain';
+import { newPracticeData, PracticeAttemptWriter, parsePracticeMinutes, practiceTitle, timerSeconds, practiceLogTime } from './practiceFlowDomain';
 import type { PracticeAction, PracticeAttempt, PracticeAttemptData, PracticeStep } from './practiceTypes';
 import { PracticeAttemptDetail } from '../journey/PracticeAttemptDetail';
 
@@ -183,7 +183,6 @@ export function PracticeActionFlow({ actionId, initialAttemptId, onClose, onSave
           <View style={practiceStyles.card}><Text style={practiceStyles.badge}>{action.state === 'active' ? 'Active' : 'Paused'}</Text>
             <Text style={practiceStyles.answer}>{action.settings.exact_task}</Text>
             {action.settings.technique ? <Text style={practiceStyles.body}>{action.settings.technique}</Text> : null}
-            <Text style={practiceStyles.hint}>{action.settings.frequency}{action.settings.timing ? ` · ${action.settings.timing}` : ''}</Text>
             {action.settings.duration_minutes !== null ? <Text style={practiceStyles.hint}>Agreed duration · {action.settings.duration_minutes} min</Text> : null}
             {action.settings.repetitions ? <Text style={practiceStyles.hint}>{action.settings.repetitions}</Text> : null}
             {action.settings.limits ? <Text style={practiceStyles.body}>{action.settings.limits}</Text> : null}
@@ -252,7 +251,7 @@ export function PracticeActionFlow({ actionId, initialAttemptId, onClose, onSave
         </> : null}
         {step === 'review' ? <>
           <Text style={practiceStyles.body}>{action.settings.technique ?? action.settings.exact_task}</Text>
-          <PracticeSummary data={data} />
+          <PracticeSummary data={data} loggedAt={attempt?.status === 'confirmed' ? practiceLogTime(attempt) : new Date().toISOString()} />
         </> : null}
       </> : <PracticeButton label="Retry loading practice" onPress={() => { setLoading(true); setError(null); setRetry(value => value + 1); }} />}
       {error ? <Text accessibilityRole="alert" style={practiceStyles.error}>{error}</Text> : null}

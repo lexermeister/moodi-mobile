@@ -1,4 +1,4 @@
-import type { PracticeAttemptData, PracticeCandidate, PracticeSettings } from './practiceTypes';
+import type { PracticeAttempt, PracticeAttemptData, PracticeCandidate, PracticeSettings } from './practiceTypes';
 
 export function practiceSettings(candidate: PracticeCandidate): PracticeSettings {
   return { exact_task: candidate.exact_task, technique: candidate.technique, resource_url: candidate.resource_url,
@@ -18,17 +18,34 @@ export function timerSeconds(elapsed: number, startedAt: number | null, now: num
   return elapsed + (startedAt === null ? 0 : Math.max(0, Math.floor((now - startedAt) / 1000)));
 }
 const labels = { completed: 'Completed', partly_completed: 'Partly completed', skipped: 'Skipped', stopped_early: 'Stopped early' };
+export function practiceDateLabel(date: string): string {
+  return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
+    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+  });
+}
+export function practiceTimeLabel(timestamp: string): string | null {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return null;
+  const hour = date.getHours();
+  if (hour >= 5 && hour < 12) return 'Morning';
+  if (hour >= 12 && hour < 17) return 'Midday';
+  if (hour >= 17 && hour < 21) return 'Evening';
+  return 'Before Sleep';
+}
+export function practiceLogTime(attempt: Pick<PracticeAttempt, 'history' | 'updated_at'>): string {
+  return attempt.history.find(version => version.status === 'confirmed')?.saved_at ?? attempt.updated_at;
+}
 export function practiceSummary(data: Pick<PracticeAttemptData, 'relevant_date' | 'outcome' | 'actual_minutes' |
   'tension_before' | 'tension_after' | 'notes' | 'timer_used' | 'timer_elapsed_seconds'>) {
-  return [
-    { label: 'Practice date', value: data.relevant_date },
-    { label: 'Outcome', value: data.outcome ? labels[data.outcome] : 'Not reported' },
-    { label: 'Practice duration', value: data.actual_minutes === null ? 'Not recorded' : `${data.actual_minutes} min` },
-    { label: 'Tension before (looking back)', value: data.tension_before === null ? 'Not rated' : `${data.tension_before}/10` },
-    { label: 'Tension after', value: data.tension_after === null ? 'Not rated' : `${data.tension_after}/10` },
-    ...(data.notes?.trim() ? [{ label: 'Anything you noticed?', value: data.notes.trim() }] : []),
-    ...(data.timer_used ? [{ label: 'Timer elapsed', value: `${Math.floor(data.timer_elapsed_seconds / 60)}m ${data.timer_elapsed_seconds % 60}s` }] : []),
-  ];
+  return {
+    date: practiceDateLabel(data.relevant_date),
+    outcome: data.outcome ? labels[data.outcome] : 'Not reported',
+    duration: data.actual_minutes === null ? 'Not recorded' : `${data.actual_minutes} min`,
+    tensionBefore: data.tension_before === null ? 'Not rated' : `${data.tension_before}/10`,
+    tensionAfter: data.tension_after === null ? 'Not rated' : `${data.tension_after}/10`,
+    notes: data.notes?.trim() || null,
+    timer: data.timer_used ? `${Math.floor(data.timer_elapsed_seconds / 60)}m ${data.timer_elapsed_seconds % 60}s` : null,
+  };
 }
 export function newPracticeData(now = new Date()): PracticeAttemptData {
   const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;

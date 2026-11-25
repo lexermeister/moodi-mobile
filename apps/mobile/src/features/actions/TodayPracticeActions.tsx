@@ -10,8 +10,7 @@ import { useMoodiPanel } from '../shell/MoodiPanel';
 
 function subtitle(action: PracticeAction, latest?: PracticeAttempt): string {
   if (latest?.status === 'draft') return 'Resume practice';
-  return [action.settings.frequency, action.settings.duration_minutes === null ? null : `${action.settings.duration_minutes} min`,
-    action.settings.timing].filter(Boolean).join(' · ');
+  return action.settings.duration_minutes === null ? 'Log your practice' : `${action.settings.duration_minutes} min practice`;
 }
 
 export function TodayPracticeActions({ refreshKey }: { refreshKey: number }) {

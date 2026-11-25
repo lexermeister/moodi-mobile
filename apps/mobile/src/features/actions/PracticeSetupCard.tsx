@@ -35,7 +35,9 @@ export function PracticeSetupCard({ candidate, recordingId, draftId, sourceVersi
     try {
       const result = await reviewPracticeCandidate({ recordingId, candidateId: candidate.id,
         draftId, sourceVersion, disposition, settings });
-      setStatus(result.disposition === 'activated' ? 'active' : 'not_added');
+      const nextStatus = result.disposition === 'activated' ? 'active' : 'not_added';
+      setStatus(nextStatus);
+      onStatusChange?.(nextStatus);
       onResolved?.();
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not review the action.'); }
     finally { setBusy(false); }
@@ -55,8 +57,6 @@ export function PracticeSetupCard({ candidate, recordingId, draftId, sourceVersi
       {onViewSource ? <Pressable accessibilityRole="button" onPress={onViewSource}>
         <Text style={styles.source}>View transcript · {candidate.source_ids.join(', ')}</Text>
       </Pressable> : <Text style={styles.source}>From transcript {candidate.source_ids.join(', ')}</Text>}
-      <Text style={styles.body}>{candidate.frequency ?? 'Every day'}{candidate.timing ? ` · ${candidate.timing}` : ''} · No reminder time</Text>
-      {!candidate.frequency ? <Text style={styles.source}>Every day is the Moodi default.</Text> : null}
     </View>
     {status === 'needs_setup' ? <>
       <View style={styles.buttons}>

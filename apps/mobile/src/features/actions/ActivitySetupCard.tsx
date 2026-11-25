@@ -41,7 +41,9 @@ export function ActivitySetupCard({ candidate, recordingId, draftId, sourceVersi
     try {
       const result = await reviewActivityCandidate({ recordingId, candidateId: candidate.id,
         draftId, sourceVersion, disposition, settings });
-      setStatus(result.disposition === 'activated' ? 'active' : 'not_added');
+      const nextStatus = result.disposition === 'activated' ? 'active' : 'not_added';
+      setStatus(nextStatus);
+      onStatusChange?.(nextStatus);
       onResolved?.();
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not review the action.'); }
     finally { setBusy(false); }

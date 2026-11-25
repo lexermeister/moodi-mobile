@@ -177,7 +177,7 @@ export function JourneySummary({ recording, onClose, onViewSource, initialActivi
             </View>
             <View style={styles.actionCopy}><Text style={styles.actionName}>{candidate.type === 'record_mood' ? 'Record mood' : candidate.type === 'practise_relaxation_breathing' ? practiceTitle(candidate) : 'Do an enjoyable activity'}</Text>
               {candidate.type === 'record_mood' ? <Text style={styles.actionDetail}>
-                {[candidate.frequency, candidate.timing, measurementLabels(candidate.what_to_record ?? ['mood'])].filter(Boolean).join(' · ')}
+                {measurementLabels(candidate.what_to_record ?? ['mood'])}
               </Text> : null}</View>
             <Text style={styles.reviewLink}>{actionLabel(candidate.id)} ›</Text>
           </Pressable>) : <Text style={styles.body}>No agreed action was identified in this session.</Text>}
