@@ -162,6 +162,10 @@ export function MoodiPanel() {
         {library.notice ? <Text accessibilityLiveRegion="polite" style={styles.copy}>{library.notice}</Text> : null}
       </ScrollView>
     </View> : null}
+    {open ? <>
+      <View pointerEvents="none" accessible={false} style={styles.panelTailBorder} />
+      <View pointerEvents="none" accessible={false} style={styles.panelTail} />
+    </> : null}
     <Pressable accessibilityRole="button" accessibilityLabel={open ? 'Minimize Moodi' : active ? 'Open recording controls' : 'Ask Moodi'}
       accessibilityState={{ expanded: open }} onPress={() => { if (open) Keyboard.dismiss(); setOpen(!open); }}
       style={[styles.launcher, library.isRecording && styles.recordingLauncher]}>
@@ -174,7 +178,16 @@ const styles = StyleSheet.create({
   layer: { position: 'absolute', right: 16, left: 16, justifyContent: 'flex-end', alignItems: 'flex-end', gap: 8 },
   panel: { backgroundColor: theme.colors.panel, borderRadius: 24, padding: 16, width: '100%', maxWidth: 400, flexShrink: 1,
     borderWidth: 1, borderColor: '#4A4655', shadowColor: '#19151F', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.26, shadowRadius: 18, elevation: 10 },
-  moodPanel: { backgroundColor: theme.colors.panel, borderRadius: 22, width: '100%', maxWidth: 400, height: 560, maxHeight: '100%', overflow: 'hidden' },
+  moodPanel: { backgroundColor: theme.colors.panel, borderRadius: 22, width: '100%', maxWidth: 400, height: 560, maxHeight: '100%', overflow: 'hidden',
+    borderWidth: 1, borderColor: '#4A4655' },
+  panelTailBorder: { position: 'absolute', right: 15, bottom: 56, width: 0, height: 0,
+    borderLeftWidth: 12, borderRightWidth: 12, borderTopWidth: 12,
+    borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#4A4655',
+    zIndex: 1, elevation: 11 },
+  panelTail: { position: 'absolute', right: 17, bottom: 58, width: 0, height: 0,
+    borderLeftWidth: 10, borderRightWidth: 10, borderTopWidth: 10,
+    borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: theme.colors.panel,
+    zIndex: 2, elevation: 12 },
   activityPanel: { maxHeight: '78%', borderWidth: 1, borderColor: '#4A4655',
     shadowColor: '#19151F', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.26,
     shadowRadius: 18, elevation: 10 },
