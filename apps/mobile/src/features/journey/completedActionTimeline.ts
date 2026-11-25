@@ -1,12 +1,14 @@
+import type { PracticeAttempt } from '../actions/practiceTypes';
 import type { RatingEntry } from '../actions/actionTypes';
 import type { ActivityAttempt } from '../actions/activityTypes';
 import type { RecordingMetadata } from '../recordings/recordingStorage';
 
 export type JourneyActionEntry =
   | { kind: 'mood'; id: string; occurredAt: string; entry: RatingEntry }
+  | { kind: 'practice'; id: string; occurredAt: string; attempt: PracticeAttempt }
   | { kind: 'activity'; id: string; occurredAt: string; attempt: ActivityAttempt };
 
-export function activityAttemptTime(attempt: ActivityAttempt): string {
+export function activityAttemptTime(attempt: Pick<ActivityAttempt, 'history' | 'updated_at'>): string {
   const firstConfirmed = attempt.history.find(version => {
     if (!version || typeof version !== 'object') return false;
     const saved = version as { status?: unknown; saved_at?: unknown };
@@ -16,7 +18,7 @@ export function activityAttemptTime(attempt: ActivityAttempt): string {
 }
 
 export function completedActionTimeline(sessions: RecordingMetadata[], moodEntries: RatingEntry[],
-  activityAttempts: ActivityAttempt[]): JourneyActionEntry[][] {
+  activityAttempts: ActivityAttempt[], practiceAttempts: PracticeAttempt[] = []): JourneyActionEntry[][] {
   const groups: JourneyActionEntry[][] = Array.from({ length: sessions.length + 1 }, () => []);
   const mood: JourneyActionEntry[] = moodEntries
     .filter(entry => entry.status === 'confirmed' && entry.values.mood_value !== null)
@@ -25,7 +27,10 @@ export function completedActionTimeline(sessions: RecordingMetadata[], moodEntri
     .filter(attempt => attempt.status === 'confirmed' && attempt.outcome !== null)
     .map(attempt => ({ kind: 'activity', id: `activity:${attempt.id}`,
       occurredAt: activityAttemptTime(attempt), attempt }));
-  const confirmed = [...mood, ...activities].sort((left, right) =>
+  const practices: JourneyActionEntry[] = practiceAttempts
+    .filter(attempt => attempt.status === 'confirmed' && attempt.outcome !== null)
+    .map(attempt => ({ kind: 'practice', id: `practice:${attempt.id}`, occurredAt: activityAttemptTime(attempt), attempt }));
+  const confirmed = [...mood, ...activities, ...practices].sort((left, right) =>
     Date.parse(right.occurredAt) - Date.parse(left.occurredAt) || right.id.localeCompare(left.id));
   for (const entry of confirmed) {
     const instant = Date.parse(entry.occurredAt);

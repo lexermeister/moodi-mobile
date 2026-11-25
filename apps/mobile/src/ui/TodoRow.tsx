@@ -1,13 +1,15 @@
+import { PracticeIcon } from './PracticeIcon';
 import { SymbolView } from 'expo-symbols';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { theme } from './theme';
 
-type TodoKind = 'session' | 'mood' | 'activity' | 'recording';
+type TodoKind = 'session' | 'mood' | 'activity' | 'recording' | 'practice';
 
 const icons = {
   session: { ios: 'doc.text', android: 'description', web: 'description' },
   mood: { ios: 'bell', android: 'notifications', web: 'notifications' },
   activity: { ios: 'heart', android: 'favorite', web: 'favorite' },
+  practice: { ios: 'wind', android: 'air', web: 'air' },
   recording: { ios: 'mic', android: 'mic', web: 'mic' },
 } as const;
 
@@ -16,9 +18,9 @@ export function TodoRow({ kind, title, subtitle, onPress }: {
 }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={`${title}. ${subtitle}`}
     onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
-    <View style={[styles.icon, kind === 'session' ? styles.sessionIcon : kind === 'recording' ? styles.recordingIcon : kind === 'activity' ? styles.activityIcon : styles.moodIcon]}>
+    {kind === 'practice' ? <PracticeIcon /> : <View style={[styles.icon, kind === 'session' ? styles.sessionIcon : kind === 'recording' ? styles.recordingIcon : kind === 'activity' ? styles.activityIcon : styles.moodIcon]}>
       <SymbolView name={icons[kind]} size={22} tintColor={kind === 'session' ? '#287453' : kind === 'recording' ? '#6045B7' : kind === 'activity' ? '#7B4D73' : '#2F7382'} />
-    </View>
+    </View>}
     <View style={styles.copy}><Text style={styles.title}>{title}</Text><Text style={styles.subtitle}>{subtitle}</Text></View>
     <Text style={styles.arrow}>›</Text>
   </Pressable>;

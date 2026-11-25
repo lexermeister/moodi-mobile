@@ -3,9 +3,9 @@ import { GestureResponderEvent, Pressable, StyleSheet, Text, TextInput, View } f
 
 const TRACK_INSET = 8;
 
-export function MoodScale({ label, value, onChange, disabled = false, low = 'Low', high = 'High', prominent = false }: {
+export function MoodScale({ label, value, onChange, disabled = false, low = 'Low', high = 'High', prominent = false, showInput = true }: {
   label: string; value: number | null; onChange: (value: number) => void;
-  disabled?: boolean; low?: string; high?: string; prominent?: boolean;
+  disabled?: boolean; low?: string; high?: string; prominent?: boolean; showInput?: boolean;
 }) {
   const [typed, setTyped] = useState('');
   const [inputError, setInputError] = useState(false);
@@ -62,14 +62,14 @@ export function MoodScale({ label, value, onChange, disabled = false, low = 'Low
     </View>
     <View style={styles.endLabels}><Text style={styles.endLabel}>{low}</Text><Text style={styles.endLabel}>{high}</Text></View>
     </View>
-    <View style={styles.inputRow}>
+    {showInput ? <View style={styles.inputRow}>
       <TextInput accessibilityLabel={`Enter ${label} score`} keyboardType="number-pad" value={typed} onChangeText={text => { setTyped(text); setInputError(false); }}
         onSubmitEditing={submitTyped} placeholder={prominent ? 'e.g. 6 out of 10' : `e.g. ${label} 4`}
         placeholderTextColor="#AAA5B5" editable={!disabled} maxLength={2} style={styles.input} />
       <Pressable accessibilityRole="button" accessibilityLabel={`Save ${label} score`} disabled={disabled || !typed.trim()} onPress={submitTyped}
         style={[styles.send, (disabled || !typed.trim()) && styles.disabled]}><Text style={styles.sendText}>↑</Text></Pressable>
-    </View>
-    {inputError ? <Text accessibilityRole="alert" style={styles.error}>Choose a whole number from 0 to 10.</Text> : null}
+    </View> : null}
+    {showInput && inputError ? <Text accessibilityRole="alert" style={styles.error}>Choose a whole number from 0 to 10.</Text> : null}
   </View>;
 }
 

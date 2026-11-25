@@ -1,9 +1,12 @@
+import { PracticeSetupCard } from '../actions/PracticeSetupCard';
+import { practiceTitle } from '../actions/practiceFlowDomain';
+import { PracticeIcon } from '@/ui/PracticeIcon';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { MoodiWave } from '@/ui/MoodiWave';
 import { measurementLabels } from '../actions/moodSetup';
-import { confirmActionReviews, getActionReviewConfirmation, getActivityCandidateResolution, getRatingCandidateResolution, type ActionReviewConfirmation } from '../actions/actionsApi';
+import { getPracticeCandidateResolution, confirmActionReviews, getActionReviewConfirmation, getActivityCandidateResolution, getRatingCandidateResolution, type ActionReviewConfirmation } from '../actions/actionsApi';
 import { ActivitySetupCard, type ActivityReviewState } from '../actions/ActivitySetupCard';
 import { RecordMoodSetupCard, type RecordMoodSessionState } from '../actions/RecordMoodSetupCard';
 import type { RecordingMetadata } from '../recordings/recordingStorage';
@@ -11,7 +14,7 @@ import { useSharedRecordingLibrary } from '../recordings/RecordingLibraryProvide
 import { isProcessing, sessionDate, sessionProcessingMessage } from './sessionPresentation';
 import { activityCandidates, reviewableActionCandidates, summaryReviewRequest } from './sessionReviewDomain';
 
-type Step = 'review' | 'mood' | 'activity';
+type Step = 'review' | 'mood' | 'activity' | 'practice';
 
 export function JourneySummary({ recording, onClose, onViewSource, initialActivityCandidateId }: { recording: RecordingMetadata; onClose: () => void; onViewSource?: () => void; initialActivityCandidateId?: string }) {
   const initialActivity = recording.sessionInsights?.result.action_candidates.some(candidate =>
@@ -71,6 +74,7 @@ export function JourneySummary({ recording, onClose, onViewSource, initialActivi
       getActionReviewConfirmation(recordingId),
       ...currentCandidates.map(candidate => candidate.type === 'record_mood'
         ? getRatingCandidateResolution(recordingId, candidate.id)
+        : candidate.type === 'practise_relaxation_breathing' ? getPracticeCandidateResolution(recordingId, candidate.id)
         : getActivityCandidateResolution(recordingId, candidate.id)),
     ]).then(([confirmation, ...resolutions]) => {
       if (cancelled) return;
@@ -165,13 +169,13 @@ export function JourneySummary({ recording, onClose, onViewSource, initialActivi
               One possible activity action could not be linked to the transcript. Check the transcript if you expected it here.
             </Text> : null}
           {candidates.length ? candidates.map(candidate => <Pressable key={candidate.id} accessibilityRole="button"
-            accessibilityLabel={`${candidate.type === 'record_mood' ? 'Record mood' : 'Do an enjoyable activity'}, ${actionLabel(candidate.id)}`}
-            onPress={() => { setSelectedId(candidate.id); setStep(candidate.type === 'record_mood' ? 'mood' : 'activity'); }} style={styles.actionRow}>
+            accessibilityLabel={`${candidate.type === 'record_mood' ? 'Record mood' : candidate.type === 'practise_relaxation_breathing' ? practiceTitle(candidate) : 'Do an enjoyable activity'}, ${actionLabel(candidate.id)}`}
+            onPress={() => { setSelectedId(candidate.id); setStep(candidate.type === 'record_mood' ? 'mood' : candidate.type === 'practise_relaxation_breathing' ? 'practice' : 'activity'); }} style={styles.actionRow}>
             <View style={[styles.actionIcon, candidate.type === 'do_enjoyable_or_meaningful_activity' && styles.activityIcon]}>
-              {candidate.type === 'record_mood' ? <MoodiWave width={20} /> :
+              {candidate.type === 'record_mood' ? <MoodiWave width={20} /> : candidate.type === 'practise_relaxation_breathing' ? <PracticeIcon /> :
                 <SymbolView name={{ ios: 'heart', android: 'favorite', web: 'favorite' }} size={22} tintColor="#7B4D73" />}
             </View>
-            <View style={styles.actionCopy}><Text style={styles.actionName}>{candidate.type === 'record_mood' ? 'Record mood' : 'Do an enjoyable activity'}</Text>
+            <View style={styles.actionCopy}><Text style={styles.actionName}>{candidate.type === 'record_mood' ? 'Record mood' : candidate.type === 'practise_relaxation_breathing' ? practiceTitle(candidate) : 'Do an enjoyable activity'}</Text>
               {candidate.type === 'record_mood' ? <Text style={styles.actionDetail}>
                 {[candidate.frequency, candidate.timing, measurementLabels(candidate.what_to_record ?? ['mood'])].filter(Boolean).join(' · ')}
               </Text> : null}</View>
@@ -182,7 +186,12 @@ export function JourneySummary({ recording, onClose, onViewSource, initialActivi
       </> : selected?.type === 'record_mood' ? <RecordMoodSetupCard key={`${insights?.draft_id}:${selected.id}`} candidate={selected}
         recordingId={recording.backendRecordingId} draftId={insights?.draft_id} sourceVersion={insights?.source_version}
         onSessionStateChange={status => setActionStates(current => current[actionKey(selected.id)] === status ? current : { ...current, [actionKey(selected.id)]: status })}
-        onResolved={() => { setSelectedId(null); setStep('review'); }} /> : selected?.type === 'do_enjoyable_or_meaningful_activity' ?
+        onResolved={() => { setSelectedId(null); setStep('review'); }} /> : selected?.type === 'practise_relaxation_breathing' ?
+        <PracticeSetupCard key={`${insights?.draft_id}:${selected.id}`} candidate={selected}
+          recordingId={recording.backendRecordingId} draftId={insights?.draft_id} sourceVersion={insights?.source_version}
+          onViewSource={onViewSource}
+          onStatusChange={status => setActionStates(current => current[actionKey(selected.id)] === status ? current : { ...current, [actionKey(selected.id)]: status })}
+          onResolved={() => { setSelectedId(null); setStep('review'); }} /> : selected?.type === 'do_enjoyable_or_meaningful_activity' ?
         <ActivitySetupCard key={`${insights?.draft_id}:${selected.id}`} candidate={selected}
           recordingId={recording.backendRecordingId} draftId={insights?.draft_id} sourceVersion={insights?.source_version}
           onViewSource={onViewSource}

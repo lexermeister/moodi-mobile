@@ -1,3 +1,4 @@
+import type { PracticeCandidate } from '../actions/practiceTypes';
 import type { RecordRatingCandidate } from '../actions/actionTypes';
 import type { ActivityCandidate } from '../actions/activityTypes';
 import type { SessionInsightsReviewRequest } from '../recordings/sessionInsightsReviewTypes';
@@ -17,8 +18,8 @@ export function activityCandidates(insights?: SessionInsightsResponse): Activity
 export function reviewableActionCandidates(insights?: SessionInsightsResponse) {
   let hasActivity = false;
   return (insights?.result.action_candidates ?? [])
-    .filter((candidate): candidate is RecordRatingCandidate | ActivityCandidate => {
-      if (candidate.type === 'record_mood') return true;
+    .filter((candidate): candidate is RecordRatingCandidate | ActivityCandidate | PracticeCandidate => {
+      if (candidate.type === 'record_mood' || candidate.type === 'practise_relaxation_breathing') return true;
       if (candidate.type !== 'do_enjoyable_or_meaningful_activity' || hasActivity) return false;
       hasActivity = true;
       return true;

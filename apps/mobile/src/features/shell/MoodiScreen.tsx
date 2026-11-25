@@ -1,3 +1,4 @@
+import { TodayPracticeActions } from '../actions/TodayPracticeActions';
 import { StyleSheet, Text, View } from 'react-native';
 import { Page, typography } from '@/ui/components';
 import { useMoodiPanel } from './MoodiPanel';
@@ -21,6 +22,7 @@ export function MoodiScreen() {
         subtitle="Open Moodi to see the session" onPress={() => setOpen(true)} /> : <ReviewSessionTodo />}
       <TodayMoodActions refreshKey={entryVersion} />
       <TodayActivityActions refreshKey={entryVersion} />
+      <TodayPracticeActions refreshKey={entryVersion} />
     </View>
     <RecentMoodChart key={entryVersion} />
     <MoodEntriesSection refreshKey={entryVersion} />

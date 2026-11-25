@@ -1,3 +1,4 @@
+import { isPracticeAction, isPracticeAttempt, type PracticeAction, type PracticeAttempt, type PracticeAttemptData, type PracticeSettings } from './practiceTypes';
 import {
   isRatingAction,
   isRatingCandidateResolution,
@@ -64,18 +65,18 @@ async function requestJson(path: string, init?: RequestInit): Promise<unknown> {
   return body ? parseJson(body) : null;
 }
 
-async function listActions(recordingId?: string): Promise<(RatingAction | ActivityAction)[]> {
+async function listActions(recordingId?: string): Promise<(RatingAction | ActivityAction | PracticeAction)[]> {
   const query = recordingId ? `?recording_id=${encodeURIComponent(recordingId)}` : '';
   const payload = await requestJson(`/actions${query}`);
   if (
     !payload ||
     typeof payload !== 'object' ||
     !Array.isArray((payload as { actions?: unknown }).actions) ||
-    !(payload as { actions: unknown[] }).actions.every(action => isRatingAction(action) || isActivityAction(action))
+    !(payload as { actions: unknown[] }).actions.every(action => isRatingAction(action) || isActivityAction(action) || isPracticeAction(action))
   ) {
     throw new ActionsApiError('The Moodi backend returned invalid Actions.');
   }
-  return (payload as { actions: (RatingAction | ActivityAction)[] }).actions;
+  return (payload as { actions: (RatingAction | ActivityAction | PracticeAction)[] }).actions;
 }
 
 export async function listRatingActions(recordingId?: string): Promise<RatingAction[]> {
@@ -403,4 +404,59 @@ export async function exportRatingEntries(actionId: string, entryIds: string[]):
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ entry_ids: entryIds }),
   });
+}
+
+export async function reviewPracticeCandidate({ recordingId, candidateId, draftId, sourceVersion,
+  disposition, settings }: { recordingId: string; candidateId: string; draftId: string;
+  sourceVersion: string; disposition: 'activate' | 'reject'; settings: PracticeSettings | null;
+}): Promise<{ disposition: 'activated' | 'rejected'; action: PracticeAction | null }> {
+  const payload = await requestJson(
+    `/recordings/${encodeURIComponent(recordingId)}/action-candidates/${encodeURIComponent(candidateId)}/review`,
+    { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ draft_id: draftId, source_version: sourceVersion, disposition, settings }) },
+  );
+  if (!payload || typeof payload !== 'object') throw new ActionsApiError('Invalid practice review.');
+  const review = payload as { disposition?: unknown; action?: unknown };
+  if ((review.disposition !== 'activated' && review.disposition !== 'rejected') ||
+    (review.action !== null && !isPracticeAction(review.action))) {
+    throw new ActionsApiError('The Moodi backend returned an invalid practice Action.');
+  }
+  return { disposition: review.disposition, action: review.action as PracticeAction | null };
+}
+
+export async function getPracticeCandidateResolution(recordingId: string, candidateId: string) {
+  const payload = await requestJson(
+    `/recordings/${encodeURIComponent(recordingId)}/action-candidates/${encodeURIComponent(candidateId)}/resolution`,
+  );
+  if (!payload || typeof payload !== 'object') throw new ActionsApiError('Invalid practice resolution.');
+  const result = payload as { status?: unknown; action?: unknown };
+  if (!['needs_setup', 'activated', 'rejected'].includes(result.status as string) ||
+    (result.action !== null && !isPracticeAction(result.action))) {
+    throw new ActionsApiError('The Moodi backend returned an invalid practice resolution.');
+  }
+  return { status: result.status as 'needs_setup' | 'activated' | 'rejected',
+    action: result.action as PracticeAction | null };
+}
+
+export async function listPracticeActions(): Promise<PracticeAction[]> {
+  return (await listActions()).filter(isPracticeAction);
+}
+export async function getPracticeAction(actionId: string): Promise<PracticeAction> {
+  const payload = await requestJson(`/actions/${encodeURIComponent(actionId)}`);
+  if (!isPracticeAction(payload)) throw new ActionsApiError('Invalid practice Action.');
+  return payload;
+}
+export async function listPracticeAttempts(actionId: string): Promise<PracticeAttempt[]> {
+  const payload = await requestJson(`/actions/${encodeURIComponent(actionId)}/practice-attempts`);
+  if (!payload || typeof payload !== 'object' || !Array.isArray((payload as { attempts?: unknown }).attempts) ||
+    !(payload as { attempts: unknown[] }).attempts.every(isPracticeAttempt)) throw new ActionsApiError('Invalid practice history.');
+  return (payload as { attempts: PracticeAttempt[] }).attempts;
+}
+export async function savePracticeAttempt(actionId: string, attemptId: string,
+  actionRevision: number, expectedRevision: number, data: PracticeAttemptData): Promise<PracticeAttempt> {
+  const payload = await requestJson(`/actions/${encodeURIComponent(actionId)}/practice-attempts/${encodeURIComponent(attemptId)}`,
+    { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...data, action_revision: actionRevision, expected_revision: expectedRevision }) });
+  if (!isPracticeAttempt(payload)) throw new ActionsApiError('Invalid saved practice.');
+  return payload;
 }

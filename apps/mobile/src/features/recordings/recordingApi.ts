@@ -1,3 +1,4 @@
+import { restartDemoRequest } from './demoResetApi';
 import { File, UploadType } from 'expo-file-system';
 
 import {
@@ -86,18 +87,7 @@ function isUploadResponse(value: unknown): value is UploadRecordingResponse {
 }
 
 export async function restartDemoBackend(): Promise<void> {
-  let response: Response;
-  try {
-    response = await fetch(`${getApiUrl()}/demo/data`, { method: 'DELETE' });
-  } catch {
-    throw new MoodiApiError('Could not reach the Moodi backend. No device data was cleared.');
-  }
-  if (response.status === 404) {
-    throw new MoodiApiError('Restart demo is unavailable on this backend.');
-  }
-  if (!response.ok) {
-    throw new MoodiApiError('Could not clear backend demo data. No device data was cleared.');
-  }
+  await restartDemoRequest(getApiUrl());
 }
 
 function isTranscriptionResponse(value: unknown): value is TranscriptionResponse {

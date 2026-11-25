@@ -1,3 +1,4 @@
+import { PracticeSetupCard } from '../actions/PracticeSetupCard';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -42,6 +43,7 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
       : undefined;
   const actionCandidates = (insights?.action_candidates ?? []).filter(candidate => candidate.type === 'record_mood');
   const activityCandidates = reviewActivityCandidates(recording.sessionInsights);
+  const practiceCandidates = (insights?.action_candidates ?? []).filter(candidate => candidate.type === 'practise_relaxation_breathing');
   const hasLegacyActions = insights?.action_candidates.some(candidate => candidate.type === 'record_rating');
   const actionSourceVersion =
     recording.sessionInsights?.source_version ?? insights?.source_version ?? 'no-source';
@@ -58,7 +60,7 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
     },
     [actionStateKey],
   );
-  const pendingActionStatuses = [...actionCandidates, ...activityCandidates]
+  const pendingActionStatuses = [...actionCandidates, ...activityCandidates, ...practiceCandidates]
     .map((candidate) => actionStates[actionStateKey(candidate.id)] ?? 'loading')
     .filter((status) => status === 'needs_setup' || status === 'already_active');
   const displayedSections = useMemo(
@@ -216,6 +218,11 @@ export function SessionInsightsCard({ recording, onSaveReview }: Props) {
               sourceVersion={actionSourceVersion}
             />
           ))}
+          {practiceCandidates.map(candidate => <PracticeSetupCard
+            key={`${recording.id}:${actionSourceVersion}:${candidate.id}`}
+            candidate={candidate} recordingId={recording.backendRecordingId}
+            draftId={draftId} sourceVersion={actionSourceVersion}
+            onStatusChange={status => handleActionStatusChange(candidate.id, status)} />)}
           {activityCandidates.map(candidate => <ActivitySetupCard
             key={`${recording.id}:${actionSourceVersion}:${candidate.id}`}
             candidate={candidate} recordingId={recording.backendRecordingId}

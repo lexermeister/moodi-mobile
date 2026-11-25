@@ -1,3 +1,4 @@
+import { PracticeActionFlow, type PracticeFlowStep } from '../actions/PracticeActionFlow';
 import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react';
 import { AppState, Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,7 +22,16 @@ const activityDialogHeights: Record<ActivityFlowStep, number> = {
   agreement: 400, choose: 420, time: 320, ready: 280,
   outcome: 420, feelings: 310, review: 420, saved: 260,
 };
+const practiceDialogHeights: Record<PracticeFlowStep, number> = {
+  agreement: 480, choice: 420, timer: 420, outcome: 530, tension: 640, notes: 480, review: 560,
+};
 type PanelState = {
+  practiceSession: { actionId: string; attemptId?: string } | null;
+  practiceStep: PracticeFlowStep;
+  setPracticeStep: (step: PracticeFlowStep) => void;
+  openPracticeCheckIn: (actionId: string, attemptId?: string) => void;
+  closePracticeCheckIn: () => void;
+  practiceSaved: () => void;
   open: boolean;
   setOpen: (value: boolean) => void;
   moodSession: MoodSession | null;
@@ -37,17 +47,22 @@ type PanelState = {
 };
 const PanelContext = createContext<PanelState | null>(null);
 export function MoodiPanelProvider({ children }: PropsWithChildren) {
+  const [practiceSession, setPracticeSession] = useState<{ actionId: string; attemptId?: string } | null>(null);
+  const [practiceStep, setPracticeStep] = useState<PracticeFlowStep>('agreement');
   const [open, setOpen] = useState(false);
   const [moodSession, setMoodSession] = useState<MoodSession | null>(null);
   const [activityActionId, setActivityActionId] = useState<string | null>(null);
   const [activityStep, setActivityStep] = useState<ActivityFlowStep>('agreement');
   const [entryVersion, setEntryVersion] = useState(0);
-  const openMoodCheckIn = (session: MoodSession) => { setActivityActionId(null); setMoodSession(current => current ?? session); setOpen(true); };
-  const openActivityCheckIn = (actionId: string) => { setMoodSession(null); setActivityStep('agreement'); setActivityActionId(actionId); setOpen(true); };
+  const openMoodCheckIn = (session: MoodSession) => { setPracticeSession(null); setActivityActionId(null); setMoodSession(current => current ?? session); setOpen(true); };
+  const openActivityCheckIn = (actionId: string) => { setPracticeSession(null); setMoodSession(null); setActivityStep('agreement'); setActivityActionId(actionId); setOpen(true); };
   const closeMoodCheckIn = () => { setMoodSession(null); setOpen(false); setEntryVersion(value => value + 1); };
   const closeActivityCheckIn = () => { setActivityActionId(null); setOpen(false); setEntryVersion(value => value + 1); };
-  const resetPanel = () => { setMoodSession(null); setActivityActionId(null); setOpen(false); setEntryVersion(value => value + 1); };
-  return <PanelContext.Provider value={{ open, setOpen, moodSession, activityActionId, activityStep, setActivityStep, openMoodCheckIn,
+  const openPracticeCheckIn = (actionId: string, attemptId?: string) => { setMoodSession(null); setActivityActionId(null); setPracticeStep('agreement'); setPracticeSession({ actionId, attemptId }); setOpen(true); };
+  const closePracticeCheckIn = () => { setPracticeSession(null); setOpen(false); setEntryVersion(value => value + 1); };
+  const practiceSaved = () => setEntryVersion(value => value + 1);
+  const resetPanel = () => { setPracticeSession(null); setMoodSession(null); setActivityActionId(null); setOpen(false); setEntryVersion(value => value + 1); };
+  return <PanelContext.Provider value={{ practiceSession, practiceStep, setPracticeStep, openPracticeCheckIn, closePracticeCheckIn, practiceSaved, open, setOpen, moodSession, activityActionId, activityStep, setActivityStep, openMoodCheckIn,
     openActivityCheckIn, closeMoodCheckIn, closeActivityCheckIn, resetPanel, entryVersion }}>{children}</PanelContext.Provider>;
 }
 export function useMoodiPanel() {
@@ -56,7 +71,7 @@ export function useMoodiPanel() {
   return value;
 }
 export function MoodiPanel() {
-  const { open, setOpen, moodSession, activityActionId, activityStep, setActivityStep, openMoodCheckIn, closeMoodCheckIn,
+  const { practiceSession, practiceStep, setPracticeStep, closePracticeCheckIn, practiceSaved, open, setOpen, moodSession, activityActionId, activityStep, setActivityStep, openMoodCheckIn, closeMoodCheckIn,
     closeActivityCheckIn, entryVersion } = useMoodiPanel();
   const library = useSharedRecordingLibrary();
   const { consumePendingReview, pendingReviewId } = library;
@@ -77,7 +92,7 @@ export function MoodiPanel() {
     return () => { show.remove(); hide.remove(); };
   }, []);
   useEffect(() => {
-    if (!open || moodSession || activityActionId || active) return;
+    if (!open || moodSession || activityActionId || practiceSession || active) return;
     let current = true;
     void listRatingActions().then(async actions => {
       for (const action of actions) {
@@ -89,7 +104,7 @@ export function MoodiPanel() {
     }).then(session => { if (current) setAvailableMood(session ? { session, version: entryVersion } : null); })
       .catch(() => { if (current) setAvailableMood(null); });
     return () => { current = false; };
-  }, [open, moodSession, activityActionId, active, entryVersion]);
+  }, [open, moodSession, activityActionId, practiceSession, active, entryVersion]);
   useEffect(() => {
     if (!pendingReviewId || appState !== 'active' || AppState.currentState !== 'active') return;
     const recordingId = pendingReviewId;
@@ -98,7 +113,12 @@ export function MoodiPanel() {
     router.push({ pathname: '/journey/session/[id]', params: { id: recordingId } });
   }, [appState, consumePendingReview, pendingReviewId, router, setOpen]);
   return <View pointerEvents="box-none" style={[styles.layer, { bottom: Math.max(64 + insets.bottom + 12, keyboardHeight + 8), top: insets.top + 16 }]}>
-    {moodSession ? <View style={[styles.moodPanel, !open && styles.hidden]}>
+    {practiceSession ? <View style={[styles.moodPanel, styles.activityPanel, { maxHeight: '90%' },
+      { height: practiceDialogHeights[practiceStep] }, !open && styles.hidden]}>
+      <PracticeActionFlow key={`${practiceSession.actionId}:${practiceSession.attemptId ?? 'new'}`}
+        actionId={practiceSession.actionId} initialAttemptId={practiceSession.attemptId}
+        onClose={closePracticeCheckIn} onSaved={practiceSaved} onStepChange={setPracticeStep} />
+    </View> : moodSession ? <View style={[styles.moodPanel, !open && styles.hidden]}>
       <MoodEntryWizard key={moodSession.draft?.id ?? moodSession.action.id} action={moodSession.action} draft={moodSession.draft} onClose={closeMoodCheckIn} />
     </View> : activityActionId ? <View style={[styles.moodPanel, styles.activityPanel,
       { height: activityDialogHeights[activityStep] }, !open && styles.hidden]}>

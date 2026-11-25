@@ -1,3 +1,6 @@
+import type { PracticeAttempt } from '../actions/practiceTypes';
+import { PracticeIcon } from '@/ui/PracticeIcon';
+import { PracticeAttemptDetail } from './PracticeAttemptDetail';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -5,7 +8,7 @@ import { Button, Card, Page, typography } from '@/ui/components';
 import { theme } from '@/ui/theme';
 import { MoodiWave } from '@/ui/MoodiWave';
 import { useCallback, useState } from 'react';
-import { listActivityActions, listActivityAttempts, listRatingActions, listRatingEntries } from '../actions/actionsApi';
+import { listPracticeActions, listPracticeAttempts, listActivityActions, listActivityAttempts, listRatingActions, listRatingEntries } from '../actions/actionsApi';
 import type { RatingEntry } from '../actions/actionTypes';
 import type { ActivityAttempt } from '../actions/activityTypes';
 import { outcomeLabels } from '../actions/activityFlowDomain';
@@ -38,11 +41,11 @@ function RecordedActions({ period, entries, onSelect, initiallyOpen = false }: {
         <Text style={styles.period}>{entryTimeLabel(item.entry)}</Text></View>
       <Text style={styles.actionScore}>{item.entry.values.mood_value}<Text style={styles.actionOutOf}>/10</Text></Text>
     </Pressable> : <Pressable key={item.id} accessibilityRole="button"
-      accessibilityLabel={`Do an enjoyable activity, ${outcomeLabels[item.attempt.outcome!]}, ${new Date(item.occurredAt).toLocaleString()}`}
+      accessibilityLabel={`${item.kind === 'practice' ? 'Relaxation / breathing practice' : 'Do an enjoyable activity'}, ${outcomeLabels[item.attempt.outcome!]}, ${new Date(item.occurredAt).toLocaleString()}`}
       onPress={() => onSelect(item)} style={({ pressed }) => [styles.actionRow, pressed && { opacity: 0.6 }]}>
-      <View style={styles.activityIcon}><SymbolView name={{ ios: 'heart', android: 'favorite', web: 'favorite' }}
-        size={22} tintColor="#7B4D73" /></View>
-      <View style={styles.copy}><Text style={styles.actionName}>Do an enjoyable activity</Text>
+      {item.kind === 'practice' ? <PracticeIcon /> : <View style={styles.activityIcon}><SymbolView name={{ ios: 'heart', android: 'favorite', web: 'favorite' }}
+        size={22} tintColor="#7B4D73" /></View>}
+      <View style={styles.copy}><Text style={styles.actionName}>{item.kind === 'practice' ? 'Relaxation / breathing practice' : 'Do an enjoyable activity'}</Text>
         <Text style={styles.period}>{new Date(item.occurredAt).toLocaleString(undefined, {
           month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
         })}</Text></View>
@@ -52,9 +55,10 @@ function RecordedActions({ period, entries, onSelect, initiallyOpen = false }: {
 
 export function JourneyScreen() {
   const library = useSharedRecordingLibrary();
-  const { setOpen, entryVersion } = useMoodiPanel();
+  const { setOpen, entryVersion, openPracticeCheckIn } = useMoodiPanel();
   const router = useRouter();
   const [entries, setEntries] = useState<RatingEntry[]>([]);
+  const [practiceAttempts, setPracticeAttempts] = useState<PracticeAttempt[]>([]);
   const [activityAttempts, setActivityAttempts] = useState<ActivityAttempt[]>([]);
   const [selected, setSelected] = useState<JourneyActionEntry | null>(null);
   const [actionsLoading, setActionsLoading] = useState(true);
@@ -66,22 +70,25 @@ export function JourneyScreen() {
     let active = true;
     setActionsLoading(true);
     setEntries([]);
-    setActivityAttempts([]);
+    setActivityAttempts([]); setPracticeAttempts([]);
     const load = async () => {
       try {
-        const [ratingActionsResult, activityActionsResult] = await Promise.allSettled([
-          listRatingActions(), listActivityActions(),
+        const [ratingActionsResult, activityActionsResult, practiceActionsResult] = await Promise.allSettled([
+          listRatingActions(), listActivityActions(), listPracticeActions(),
         ]);
         const ratingActions = ratingActionsResult.status === 'fulfilled' ? ratingActionsResult.value : [];
         const activityActions = activityActionsResult.status === 'fulfilled' ? activityActionsResult.value : [];
-        const [ratingRows, activityRows] = await Promise.all([
+        const practiceActions = practiceActionsResult.status === 'fulfilled' ? practiceActionsResult.value : [];
+        const [ratingRows, activityRows, practiceRows] = await Promise.all([
           Promise.allSettled(ratingActions.map(action => listRatingEntries(action.id))),
           Promise.allSettled(activityActions.map(action => listActivityAttempts(action.id))),
+          Promise.allSettled(practiceActions.map(action => listPracticeAttempts(action.id))),
         ]);
         if (active) {
           setEntries(ratingRows.flatMap(result => result.status === 'fulfilled' ? result.value : []));
           setActivityAttempts(activityRows.flatMap(result => result.status === 'fulfilled' ? result.value : []));
-          const failed = ratingActionsResult.status === 'rejected' || activityActionsResult.status === 'rejected' ||
+          setPracticeAttempts(practiceRows.flatMap(result => result.status === 'fulfilled' ? result.value : []));
+          const failed = practiceActionsResult.status === 'rejected' || practiceRows.some(result => result.status === 'rejected') || ratingActionsResult.status === 'rejected' || activityActionsResult.status === 'rejected' ||
             ratingRows.some(result => result.status === 'rejected') || activityRows.some(result => result.status === 'rejected');
           setActionsError(failed ? 'Some recorded actions could not be loaded. Try again to see the full history.' : null);
         }
@@ -94,7 +101,7 @@ export function JourneyScreen() {
   }, [retry, entryVersion]));
   const sessions = sortedSessions(library.recordings);
   const { needsReview, error: reviewError } = useSessionReviewStatus(sessions[0]);
-  const groups = completedActionTimeline(sessions, entries, activityAttempts);
+  const groups = completedActionTimeline(sessions, entries, activityAttempts, practiceAttempts);
   const shortDate = (index: number) => sessionDate(sessions[index]).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   return <Page>
     <Text style={typography.title}>Journey</Text>
@@ -140,6 +147,10 @@ export function JourneyScreen() {
     /> : null}
     </View>
     {selected?.kind === 'mood' ? <MoodEntryDetail entry={selected.entry} onClose={() => setSelected(null)} /> : null}
+    {selected?.kind === 'practice' ? <PracticeAttemptDetail attempt={selected.attempt}
+      onClose={() => setSelected(null)} onEdit={() => {
+        openPracticeCheckIn(selected.attempt.action_id, selected.attempt.id); setSelected(null);
+      }} /> : null}
     {selected?.kind === 'activity' ? <ActivityAttemptDetail attempt={selected.attempt}
       occurredAt={selected.occurredAt} onClose={() => setSelected(null)} /> : null}
   </Page>;
