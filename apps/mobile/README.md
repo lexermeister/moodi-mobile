@@ -1,8 +1,52 @@
 # Moodi mobile
 
-The app records and stores verified M4A files locally. When the user taps **Generate session
-insights**, it uploads the recording, requests a client/therapist transcript, generates structured
-insights, and keeps the transcript available as secondary detail. Completed stages are persisted so
+## Working browser target
+
+The web target now uses IndexedDB for local audio and metadata, browser multipart uploads, and
+downloads. Run `npm run web` for development or `npm run build:web` for a production SPA in `dist/`.
+Use Node 24.3 or newer. Browser microphone access requires localhost or HTTPS. Configure
+`EXPO_PUBLIC_API_URL` before building and allow the web origin in backend `CORS_ORIGINS`.
+Static hosting must rewrite client-side routes to `index.html`.
+
+Web recordings keep their actual WebM/MP4 container; they are not relabeled as native M4A files.
+The backend web-submission changes are required to accept WebM. The OpenAI API key stays only on
+the server. Existing enjoyable-activity screens still require backend endpoints absent from main.
+Run `npm test`, `npm run typecheck`, and `npm run lint` for the local checks. CI also runs the
+tests and production web build.
+
+### Test the flows in a browser
+
+Use this repository's `codex/web-submission` branch together with the backend branch of the same
+name. From a terminal in `moodi-backend`, install with `uv sync --locked`, configure `.env` from
+`.env.example` on first setup, and run `uv run uvicorn app.main:app --reload`. Set the backend-only
+`OPENAI_API_KEY` to exercise live transcription and insight generation; leave
+`TRANSCRIPTION_FIXTURE_PATH` unset for live audio. The example `CORS_ORIGINS` includes
+`http://localhost:8081`.
+
+In a second terminal, from this repository's `apps/mobile` directory:
+
+```sh
+npm ci
+# First setup only: copy .env.example to .env.local; preserve any existing local configuration.
+# Set EXPO_PUBLIC_API_URL=http://127.0.0.1:8000 in .env.local.
+npm run web -- --localhost --port 8081
+```
+
+Open `http://localhost:8081`, allow microphone access, and use the Moodi panel to record a short
+conversation. Stop recording to upload and open the session review in Journey. Review the
+transcript and summary, reload to check persistence, and use recording details for playback,
+download, and local deletion. Missing credentials produce a retryable error rather than sample
+AI output. Live AI was not verified without credentials; automated API tests mock OpenAI.
+
+The purpose of these changes is to test the existing flows in a browser. They are not a public
+deployment. Native iOS/Android builds were not rerun. Expo Doctor flags existing SDK 58 package
+version mismatches, which remain for separate review.
+Action/history deletion and the development Restart demo control still use native confirmation
+dialogs and are not supported by this browser adaptation. Recording deletion has a browser dialog.
+
+The native app records verified M4A files; the browser saves WebM or MP4 audio in IndexedDB.
+Stopping a recording automatically starts upload, transcription, and insight generation and opens
+the session review in Journey. The transcript remains available as secondary detail. Completed stages are persisted so
 a retry does not repeat successful work. Generated insights remain an immutable draft; the user can
 edit or remove visible bullets and save a separate reviewed version that persists locally and on the
 backend.

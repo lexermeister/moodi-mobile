@@ -38,9 +38,12 @@
     "@types/react": "~19.3.0",
     "eslint": "^9.39.5",
     "eslint-config-expo": "~58.0.4",
+    "fake-indexeddb": "^6.2.8",
     "typescript": "~6.0.3"
   },
   "scripts": {
+    "build:web": "expo export --platform web",
+    "test": "node --test tests/*.test.mjs",
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",

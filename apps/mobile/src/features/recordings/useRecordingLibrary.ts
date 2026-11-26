@@ -10,9 +10,8 @@ import {
   type RecordingStatus,
 } from 'expo-audio';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Linking } from 'react-native';
+import { AppState, Linking, Platform } from 'react-native';
 
 import {
   generateSessionInsights,
@@ -21,6 +20,7 @@ import {
   transcribeRecording,
   uploadRecording,
 } from './recordingApi';
+import { exportRecording } from './exportRecording';
 import {
   clearPersistedRecordings,
   deletePersistedRecording,
@@ -339,7 +339,8 @@ export function useRecordingLibrary() {
         shouldPlayInBackground: false,
         shouldRouteThroughEarpiece: false,
       });
-      await activateKeepAwakeAsync(KEEP_AWAKE_TAG);
+      // Screen wake lock is optional; browsers may deny it even with microphone access.
+      await activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => undefined);
 
       const startedAt = new Date();
       await withTimeout(
@@ -421,14 +422,7 @@ export function useRecordingLibrary() {
 
   const shareRecording = useCallback(async (recording: RecordingMetadata) => {
     try {
-      if (!(await Sharing.isAvailableAsync())) {
-        throw new Error('Sharing is not available on this device.');
-      }
-      await Sharing.shareAsync(getRecordingUri(recording), {
-        dialogTitle: 'Export Moodi recording',
-        mimeType: 'audio/mp4',
-        UTI: 'public.mpeg-4-audio',
-      });
+      await exportRecording(recording);
     } catch (shareError) {
       setError(messageFrom(shareError, 'The recording could not be exported.'));
     }
@@ -460,7 +454,7 @@ export function useRecordingLibrary() {
     try {
       await stopPlayback();
       await restartDemoBackend();
-      clearPersistedRecordings();
+      await clearPersistedRecordings();
       setRecordings([]);
       setPendingReviewId(null);
       setError(null);
@@ -628,7 +622,13 @@ export function useRecordingLibrary() {
     isRestartingDemo,
     isStarting: phase === 'starting',
     notice,
-    openSettings: Linking.openSettings,
+    openSettings: () => {
+      if (Platform.OS === 'web') {
+        setError('Microphone access is blocked. Open site settings beside the browser address, allow the microphone, and reload Moodi.');
+        return;
+      }
+      return Linking.openSettings();
+    },
     permission,
     pendingReviewId,
     playingId: playerStatus.playing ? playingId : null,

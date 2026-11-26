@@ -1,4 +1,4 @@
-import { File, UploadType } from 'expo-file-system';
+import { uploadAudio } from './uploadAudio';
 
 import {
   isSessionInsightsResponse,
@@ -127,23 +127,11 @@ function isTranscriptionResponse(value: unknown): value is TranscriptionResponse
 }
 
 export async function uploadRecording(uri: string): Promise<UploadRecordingResponse> {
-  const file = new File(uri);
-  if (!file.exists || file.size <= 0) {
-    throw new MoodiApiError('The local recording is missing or empty.');
-  }
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
 
   try {
-    const result = await file.upload(`${getApiUrl()}/recordings`, {
-      fieldName: 'file',
-      httpMethod: 'POST',
-      mimeType: 'audio/mp4',
-      sessionType: 'foreground',
-      signal: controller.signal,
-      uploadType: UploadType.MULTIPART,
-    });
+    const result = await uploadAudio(uri, `${getApiUrl()}/recordings`, controller.signal);
 
     if (result.status < 200 || result.status >= 300) {
       throw new MoodiApiError(
@@ -164,7 +152,7 @@ export async function uploadRecording(uri: string): Promise<UploadRecordingRespo
     if (controller.signal.aborted) {
       throw new MoodiApiError('The recording upload timed out.');
     }
-    throw new MoodiApiError('Could not reach the Moodi backend.');
+    throw new MoodiApiError(error instanceof Error ? error.message : 'Could not reach the Moodi backend.');
   } finally {
     clearTimeout(timeout);
   }

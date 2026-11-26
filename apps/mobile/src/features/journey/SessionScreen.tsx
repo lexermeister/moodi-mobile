@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Page, typography } from '@/ui/components';
 import { useSharedRecordingLibrary } from '../recordings/RecordingLibraryProvider';
+import { confirmRecordingDeletion } from '../recordings/confirmRecordingDeletion';
 import { JourneySummary } from './JourneySummary';
 import { theme } from '@/ui/theme';
 import { formatDuration, isProcessing, sessionDate, sessionProcessingMessage, sessionStatus } from './sessionPresentation';
@@ -58,9 +59,7 @@ export function SessionScreen() {
     </Card>
     {library.error ? <Text accessibilityLiveRegion="polite" style={typography.error}>{library.error}</Text> : null}
     <Button secondary label="Export recording" disabled={busy} onPress={() => void library.shareRecording(recording)} />
-    <Button secondary label="Delete recording" disabled={busy} onPress={() => Alert.alert('Delete recording?', 'This removes the audio and saved session details from this device.', [
-      { text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => void library.deleteRecording(recording) },
-    ])} />
+    <Button secondary label="Delete recording" disabled={busy} onPress={() => confirmRecordingDeletion(() => void library.deleteRecording(recording))} />
     </> : null}
   </Page>;
 }
