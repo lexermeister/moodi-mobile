@@ -1,7 +1,5 @@
 import {
-  getRecordingPermissionsAsync,
   RecordingPresets,
-  requestRecordingPermissionsAsync,
   setAudioModeAsync,
   useAudioPlayer,
   useAudioPlayerStatus,
@@ -9,10 +7,11 @@ import {
   useAudioRecorderState,
   type RecordingStatus,
 } from 'expo-audio';
-import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import * as Sharing from 'expo-sharing';
+import { activateKeepAwakeAsync, deactivateKeepAwake, getRecordingPermissionsAsync,
+  requestRecordingPermissionsAsync, openRecordingSettings } from './recordingEnvironment';
+import { exportRecording } from './shareRecording';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Linking } from 'react-native';
+import { AppState } from 'react-native';
 
 import {
   generateSessionInsights,
@@ -421,14 +420,7 @@ export function useRecordingLibrary() {
 
   const shareRecording = useCallback(async (recording: RecordingMetadata) => {
     try {
-      if (!(await Sharing.isAvailableAsync())) {
-        throw new Error('Sharing is not available on this device.');
-      }
-      await Sharing.shareAsync(getRecordingUri(recording), {
-        dialogTitle: 'Export Moodi recording',
-        mimeType: 'audio/mp4',
-        UTI: 'public.mpeg-4-audio',
-      });
+      await exportRecording(recording);
     } catch (shareError) {
       setError(messageFrom(shareError, 'The recording could not be exported.'));
     }
@@ -460,7 +452,7 @@ export function useRecordingLibrary() {
     try {
       await stopPlayback();
       await restartDemoBackend();
-      clearPersistedRecordings();
+      await clearPersistedRecordings();
       setRecordings([]);
       setPendingReviewId(null);
       setError(null);
@@ -608,7 +600,7 @@ export function useRecordingLibrary() {
 
   useEffect(
     () => () => {
-      void deactivateKeepAwake(KEEP_AWAKE_TAG);
+      void deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => undefined);
       player.pause();
       if (recorder.isRecording) {
         void recorder.stop();
@@ -628,7 +620,7 @@ export function useRecordingLibrary() {
     isRestartingDemo,
     isStarting: phase === 'starting',
     notice,
-    openSettings: Linking.openSettings,
+    openSettings: openRecordingSettings,
     permission,
     pendingReviewId,
     playingId: playerStatus.playing ? playingId : null,

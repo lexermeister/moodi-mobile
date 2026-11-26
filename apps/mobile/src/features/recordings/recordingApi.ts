@@ -1,5 +1,6 @@
 import { restartDemoRequest } from './demoResetApi';
-import { File, UploadType } from 'expo-file-system';
+import { AudioUploadError } from './audioUploadError';
+import { uploadAudioFile } from './uploadAudioFile';
 
 import {
   isSessionInsightsResponse,
@@ -117,23 +118,11 @@ function isTranscriptionResponse(value: unknown): value is TranscriptionResponse
 }
 
 export async function uploadRecording(uri: string): Promise<UploadRecordingResponse> {
-  const file = new File(uri);
-  if (!file.exists || file.size <= 0) {
-    throw new MoodiApiError('The local recording is missing or empty.');
-  }
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
 
   try {
-    const result = await file.upload(`${getApiUrl()}/recordings`, {
-      fieldName: 'file',
-      httpMethod: 'POST',
-      mimeType: 'audio/mp4',
-      sessionType: 'foreground',
-      signal: controller.signal,
-      uploadType: UploadType.MULTIPART,
-    });
+    const result = await uploadAudioFile(uri, `${getApiUrl()}/recordings`, controller.signal);
 
     if (result.status < 200 || result.status >= 300) {
       throw new MoodiApiError(
@@ -148,6 +137,7 @@ export async function uploadRecording(uri: string): Promise<UploadRecordingRespo
     }
     return payload;
   } catch (error) {
+    if (error instanceof AudioUploadError) throw new MoodiApiError(error.message);
     if (error instanceof MoodiApiError) {
       throw error;
     }

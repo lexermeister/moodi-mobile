@@ -1,6 +1,7 @@
+import { Alert } from '@/ui/alert';
 import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Page, typography } from '@/ui/components';
 import { useSharedRecordingLibrary } from '../recordings/RecordingLibraryProvider';
 import { JourneySummary } from './JourneySummary';

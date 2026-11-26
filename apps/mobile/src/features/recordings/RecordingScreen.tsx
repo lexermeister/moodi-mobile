@@ -1,7 +1,7 @@
+import { Alert } from '@/ui/alert';
 import { useCallback } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,

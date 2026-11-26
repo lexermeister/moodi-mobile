@@ -1,0 +1,71 @@
+/* Keep the real app at the prototype's phone size, even on a desktop browser. */
+.moodi-browser-canvas {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  height: 100dvh;
+  overflow: auto;
+  padding: 35px 24px 42px;
+  background: #f7f7fa;
+}
+
+.moodi-phone-stage {
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: center;
+  width: min(100%, 462px);
+  margin: auto;
+  padding: 25px;
+  border: 1px solid #dad1fb;
+  border-radius: 30px;
+  background: #e4dbff;
+}
+
+.moodi-phone-app {
+  box-sizing: border-box;
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 410px;
+  height: min(700px, max(610px, calc(100dvh - 170px)));
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #d9d5e5;
+  border-radius: 27px;
+  background: #fcfbfe;
+  box-shadow: 0 22px 48px #31245924, 0 4px 12px #31245912;
+}
+
+/* On phones and narrow tablets, use the screen rather than an inset frame. */
+@media (max-width: 795px) {
+  .moodi-browser-canvas {
+    overflow: hidden;
+    padding: 0;
+    background: #fcfbfe;
+  }
+
+  .moodi-phone-stage {
+    width: 100%;
+    max-width: 500px;
+    height: 100%;
+    margin: 0 auto;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .moodi-phone-app {
+    max-width: none;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}

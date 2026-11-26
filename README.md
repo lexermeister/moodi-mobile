@@ -44,6 +44,66 @@ npx expo run:ios
 
 Use `npx expo run:ios` for the initial development build. Later JavaScript-only changes can use `npm start` with the installed development client.
 
+## Web demo
+
+Web and mobile share the same routes, screens, and processing workflow in `apps/mobile`.
+Expo selects `.web.ts` / `.web.tsx` adapters for browser storage, uploads, downloads,
+permissions, dialogs, and the desktop frame. The matching unsuffixed modules retain
+native mobile behavior.
+
+The web app keeps the prototype’s mobile layout: on desktop it sits inside a
+410px-wide phone frame with a lavender surround. At browser widths of 795px or
+less, the frame decorations disappear and the app fills the available height,
+with a maximum width of 500px. Screens scroll within the app while tabs and
+Moodi controls stay inside the same viewport. The native mobile frame is unchanged.
+
+Use Node 24.3 or newer. From `apps/mobile`:
+
+```bash
+npm run web -- --localhost --port 8082
+npm test
+npm run typecheck
+npm run lint
+npm run build:web
+```
+
+The browser demo runs at `http://localhost:8082`. Set `EXPO_PUBLIC_API_URL` to a reachable
+backend. The backend must include the frontend origin in its CORS configuration:
+
+```dotenv
+CORS_ALLOWED_ORIGINS=["http://localhost:8082"]
+```
+
+Browser recordings and metadata are saved together in IndexedDB before processing begins.
+They survive reloads on the same browser and origin; clearing site data removes them, and
+private browsing may restrict storage. Data is not synchronized between devices or origins.
+Microphone access is requested when recording starts. Hosted microphone recording requires HTTPS.
+
+The original browser audio is retained for playback and download. MP4/M4A recordings upload
+directly; WebM/OGG recordings are converted locally to mono 16 kHz PCM16 WAV for the existing
+backend audio contract. The 25 MiB transcription limit permits roughly 13 minutes of converted
+WAV. Longer recordings remain saved and exportable, but processing reports a size error.
+A conversion or network failure also leaves the original recording available for retry/export.
+Restart demo is available in browser builds and native development builds. It requires
+a development backend and clears local storage only after the backend explicitly confirms reset.
+
+For Vercel, use `apps/mobile` as the project root. The committed `vercel.json` builds the
+single-page web export into `dist` and routes deep links back to `index.html`. Configure
+`EXPO_PUBLIC_API_URL` in Vercel and the deployed website origin in the backend CORS list,
+then rebuild. Provider API keys belong only on the backend.
+
+Before public demo access, add visitor data isolation and request limits to the backend.
+CORS only enables browser access; it does not isolate sessions or authenticate testers.
+
+Browser smoke checks:
+
+1. Load Today and Journey without a startup error or automatic microphone prompt.
+2. Start and stop a short synthetic recording. Confirm it is saved before upload starts.
+3. Refresh and confirm the recording and processing status remain; play and download it.
+4. Exercise a recording with the backend unavailable, restore connectivity, and retry.
+5. Review insights and actions; verify discard/delete dialogs require confirmation.
+6. Repeat on Safari and Chrome, including microphone denial and mobile-width layouts.
+
 ## Manual iOS Simulator checks
 
 1. Launch the local development build and tap **Record**.

@@ -1,8 +1,8 @@
+import { Alert } from '@/ui/alert';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   StyleSheet,
   Text,

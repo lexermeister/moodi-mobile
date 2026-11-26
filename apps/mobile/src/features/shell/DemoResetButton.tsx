@@ -1,6 +1,7 @@
+import { Alert } from '@/ui/alert';
 import { useState } from 'react';
 import { SymbolView } from 'expo-symbols';
-import { Alert, Pressable, StyleSheet, Text } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text } from 'react-native';
 import { useSharedRecordingLibrary } from '../recordings/RecordingLibraryProvider';
 import { useMoodiPanel } from './MoodiPanel';
 import { theme } from '@/ui/theme';
@@ -10,7 +11,7 @@ export function DemoResetButton() {
   const { moodSession, resetPanel } = useMoodiPanel();
   const [busy, setBusy] = useState(false);
 
-  if (!__DEV__) return null;
+  if (!__DEV__ && Platform.OS !== 'web') return null;
 
   async function restart() {
     setBusy(true);

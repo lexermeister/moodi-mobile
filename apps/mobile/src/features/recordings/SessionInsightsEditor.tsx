@@ -1,5 +1,6 @@
+import { Alert } from '@/ui/alert';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { SessionInsightsResponse } from './sessionInsightsTypes';
 import type {

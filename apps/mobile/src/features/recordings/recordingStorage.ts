@@ -1,97 +1,14 @@
 import { Directory, File, FileMode, Paths } from 'expo-file-system';
 
-import {
-  isSessionInsightsResponse,
-  type SessionInsightsResponse,
-} from './sessionInsightsTypes';
-import {
-  isSessionInsightsReviewResponse,
-  type SessionInsightsReviewResponse,
-} from './sessionInsightsReviewTypes';
-import { isTranscriptTurn, type TranscriptTurn } from './transcriptionTypes';
-
-export type RecordingMetadata = {
-  id: string;
-  fileName: string;
-  createdAt: string;
-  sessionDate?: string;
-  durationMs: number;
-  sizeBytes: number;
-  backendRecordingId?: string;
-  processingStatus?: RecordingProcessingStatus;
-  processingError?: string;
-  transcript?: string;
-  transcriptTurns?: TranscriptTurn[];
-  transcriptionLanguages?: string[];
-  sessionInsights?: SessionInsightsResponse;
-  sessionInsightsReview?: SessionInsightsReviewResponse;
-  failedStage?: RecordingFailedStage;
-};
-
-type StoredRecordingMetadata = Omit<RecordingMetadata, 'sessionInsights'> & {
-  sessionInsights?: unknown;
-};
-
-export type RecordingFailedStage = 'upload' | 'transcription' | 'insights';
-
-export type RecordingProcessingStatus =
-  | 'local'
-  | 'uploading'
-  | 'transcribing'
-  | 'ready_for_insights'
-  | 'generating_insights'
-  | 'completed'
-  | 'failed';
+import { isSessionInsightsResponse } from './sessionInsightsTypes';
+import { isRecordingMetadata, type RecordingMetadata } from './recordingMetadata';
+export type { RecordingMetadata, RecordingFailedStage, RecordingProcessingStatus } from './recordingMetadata';
 
 const recordingsDirectory = new Directory(Paths.document, 'recordings');
 const indexFile = new File(recordingsDirectory, 'index.json');
 
 function ensureRecordingsDirectory() {
   recordingsDirectory.create({ idempotent: true, intermediates: true });
-}
-
-function isRecordingMetadata(value: unknown): value is StoredRecordingMetadata {
-  if (!value || typeof value !== 'object') {
-    return false;
-  }
-
-  const item = value as Partial<RecordingMetadata>;
-  const processingStatuses: RecordingProcessingStatus[] = [
-    'local',
-    'uploading',
-    'transcribing',
-    'ready_for_insights',
-    'generating_insights',
-    'completed',
-    'failed',
-  ];
-
-  return (
-    typeof item.id === 'string' &&
-    typeof item.fileName === 'string' &&
-    item.fileName.endsWith('.m4a') &&
-    typeof item.createdAt === 'string' &&
-    Number.isFinite(Date.parse(item.createdAt)) &&
-    (item.sessionDate === undefined || /^\d{4}-\d{2}-\d{2}$/.test(item.sessionDate)) &&
-    typeof item.durationMs === 'number' &&
-    item.durationMs >= 0 &&
-    typeof item.sizeBytes === 'number' &&
-    item.sizeBytes > 0 &&
-    (item.backendRecordingId === undefined || typeof item.backendRecordingId === 'string') &&
-    (item.processingStatus === undefined || processingStatuses.includes(item.processingStatus)) &&
-    (item.processingError === undefined || typeof item.processingError === 'string') &&
-    (item.transcript === undefined || typeof item.transcript === 'string') &&
-    (item.transcriptTurns === undefined ||
-      (Array.isArray(item.transcriptTurns) && item.transcriptTurns.every(isTranscriptTurn))) &&
-    (item.transcriptionLanguages === undefined ||
-      (Array.isArray(item.transcriptionLanguages) &&
-        item.transcriptionLanguages.every((language) => typeof language === 'string'))) &&
-    (item.sessionInsights === undefined || typeof item.sessionInsights === 'object') &&
-    (item.sessionInsightsReview === undefined ||
-      isSessionInsightsReviewResponse(item.sessionInsightsReview)) &&
-    (item.failedStage === undefined ||
-      ['upload', 'transcription', 'insights'].includes(item.failedStage))
-  );
 }
 
 function localDate(date: Date) {
@@ -174,7 +91,7 @@ export async function loadRecordings(): Promise<RecordingMetadata[]> {
 
   let needsRewrite = false;
   const valid = parsed
-    .filter(isRecordingMetadata)
+    .filter(item => isRecordingMetadata(item))
     .filter((recording) => {
       const file = new File(recordingsDirectory, recording.fileName);
       return isVerifiedM4A(file);
